@@ -1,0 +1,3 @@
+export { configureMock, generateRequestId, generateIdempotencyKey, safeDelay, shouldSimulateError, createApiMeta, successResponse, errorResponse, mapError, paginate, getMockConfig } from './apiClient';
+export { demoUser, demoWorkspace, demoProjects, demoAgents, demoBuilds, getBuildsForProject, demoVersions, demoExports, demoProjectAssets, demoProviders, demoNotifications, demoActivityFeed, demoTemplates, demoTemplateCategories, getServiceStatuses, demoFileTree, DEMO_HERO_FILE } from './demoData';
+export type { DemoActivityItem, DemoTemplate, DemoFileNode } from './demoData';

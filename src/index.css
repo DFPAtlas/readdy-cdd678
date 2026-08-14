@@ -1,0 +1,278 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* --- Forge Dark Theme (default) --- */
+  --app-bg: 215 5% 7%;
+  --sidebar-bg: 218 5% 10%;
+  --panel-bg: 216 6% 13%;
+  --panel-elevated: 218 7% 17%;
+  --surface-hover: 216 6% 16%;
+  --surface-active: 218 7% 20%;
+  --border-subtle: 216 7% 18%;
+  --border-default: 216 7% 24%;
+
+  /* Brand */
+  --brand-amber: 38 92% 50%;
+  --brand-amber-dim: 38 92% 35%;
+  --cool-accent: 196 82% 60%;
+  --cool-accent-dim: 196 82% 40%;
+
+  /* Semantic */
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --error: 0 84% 60%;
+  --agent-active: 258 90% 66%;
+
+  /* Text */
+  --text-primary: 210 10% 92%;
+  --text-secondary: 214 8% 65%;
+  --text-muted: 214 6% 48%;
+  --text-inverse: 215 5% 7%;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing & Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows (minimal) */
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  background-color: hsl(var(--app-bg));
+  color: hsl(var(--text-primary));
+}
+
+:root.light {
+  --app-bg: 210 10% 96%;
+  --sidebar-bg: 214 8% 92%;
+  --panel-bg: 0 0% 100%;
+  --panel-elevated: 0 0% 100%;
+  --surface-hover: 214 10% 90%;
+  --surface-active: 214 12% 86%;
+  --border-subtle: 214 8% 85%;
+  --border-default: 214 8% 78%;
+
+  --text-primary: 215 5% 7%;
+  --text-secondary: 214 6% 40%;
+  --text-muted: 214 5% 55%;
+  --text-inverse: 210 10% 96%;
+
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  color-scheme: light;
+  background-color: hsl(var(--app-bg));
+  color: hsl(var(--text-primary));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-default));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--text-muted));
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid hsl(var(--brand-amber));
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: hsl(var(--brand-amber) / 0.3);
+  color: hsl(var(--text-primary));
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hero entrance animations */
+@keyframes heroFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroFadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes heroScaleIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes heroLogoIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes forgeGlow {
+  0%, 100% {
+    opacity: 0.25;
+    filter: blur(40px);
+  }
+  50% {
+    opacity: 0.55;
+    filter: blur(52px);
+  }
+}
+
+@keyframes forgePulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes progressPulse {
+  0%, 100% {
+    opacity: 0.3;
+    width: 28%;
+  }
+  50% {
+    opacity: 1;
+    width: 62%;
+  }
+}
+
+.animate-hero-fade-in {
+  animation: heroFadeInUp 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-hero-fade-left {
+  animation: heroFadeInLeft 0.7s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-hero-accent {
+  animation: heroScaleIn 0.6s ease-out forwards;
+  transform-origin: center;
+  opacity: 0;
+}
+
+.animate-hero-logo {
+  animation: heroLogoIn 0.7s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-forge-glow {
+  animation: forgeGlow 3s ease-in-out infinite;
+}
+
+.animate-forge-pulse {
+  animation: forgePulse 2s ease-in-out infinite;
+}
+
+.animate-progress-pulse {
+  animation: progressPulse 2.2s ease-in-out infinite;
+}
+
+/* Scroll line animation for hero indicator */
+@keyframes scrollLineDown {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-scroll-line {
+  animation: scrollLineDown 2.4s ease-in-out infinite;
+}
+
+/* Hide native video controls completely */
+video::-webkit-media-controls,
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button,
+video::-webkit-media-controls-overlay-play-button,
+video::-webkit-media-controls-timeline,
+video::-webkit-media-controls-volume-slider,
+video::-webkit-media-controls-mute-button,
+video::-webkit-media-controls-fullscreen-button,
+video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+/* Firefox video controls hiding */
+video::-moz-media-controls,
+video::-moz-media-controls-panel {
+  display: none !important;
+}
