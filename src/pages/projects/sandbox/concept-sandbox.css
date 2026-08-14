@@ -94,11 +94,23 @@
 .ai-prompt-box { position:relative; margin:13px 9px 12px; border:1px solid #34404c; border-radius:7px; background:#101820; }
 .ai-prompt-box textarea { width:100%; height:72px; padding:12px 42px 10px 12px; resize:none; border:0; outline:0; color:#e7ecf0; background:transparent; font-size:13px; line-height:1.5; }
 .ai-prompt-box button { position:absolute; right:9px; bottom:9px; width:28px; height:28px; display:grid; place-items:center; border:0; background:transparent; cursor:pointer; }
+.ai-prompt-box button:disabled { cursor:wait; opacity:.65; } .spin { animation:forge-spin .8s linear infinite; } @keyframes forge-spin { to { transform:rotate(360deg); } }
+.ai-tools-row { display:flex; align-items:center; justify-content:space-between; margin:-2px 9px 12px; }
+.ai-tools-row button { display:flex; align-items:center; gap:6px; padding:7px 9px; border:1px solid #3a4652; border-radius:5px; color:#f6b326; background:#121b24; cursor:pointer; font-size:11px; }
+.ai-tools-row span { color:#75818b; font-size:10px; }
+.prompt-builder { display:grid; gap:8px; margin:0 9px 12px; padding:12px; border:1px solid #705617; border-radius:7px; background:linear-gradient(145deg,#17170f,#101820); box-shadow:0 10px 26px #0005; }
+.prompt-builder-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; } .prompt-builder-heading strong { color:#f0f3f5; font-size:12px; }
+.prompt-builder-heading button { display:grid; place-items:center; border:0; color:#929da7; background:transparent; cursor:pointer; }
+.prompt-builder label { display:grid; grid-template-columns:78px 1fr; align-items:center; gap:7px; color:#9ca6af; font-size:10px; }
+.prompt-builder input { width:100%; min-width:0; height:29px; padding:0 8px; border:1px solid #35424d; border-radius:4px; outline:0; color:#e7ecef; background:#0b131b; }
+.build-prompt-button { height:32px; margin-top:3px; border:0; border-radius:5px; color:#17110a!important; background:var(--amber); cursor:pointer; font-weight:700; }
 .proposal-card { margin:0 9px 12px; padding:13px; border:1px solid #34404b; border-radius:7px; background:#101821; transition:border-color .2s; } .proposal-card.applied { border-color:#2d9b4d; } .proposal-card.rejected { border-color:#8c4040; opacity:.72; }
 .proposal-card h3 { display:flex; align-items:center; gap:8px; margin:0 0 15px; font-size:14px; } .proposal-card h3 svg { color:var(--amber); }
 .proposal-card p { display:flex; align-items:center; gap:9px; margin:10px 0; color:#dce2e7; } .proposal-card p span { width:16px; height:16px; display:grid; place-items:center; border-radius:50%; color:#07120b; background:#5bd876; }
+.proposal-card small { display:block; color:#8f9aa4; line-height:1.55; }
 .proposal-actions { display:grid; grid-template-columns:1.25fr .7fr .7fr; gap:9px; margin-top:17px; } .proposal-actions button { height:34px; border:1px solid #3a4652; border-radius:5px; color:#d9dfe4; background:#121b24; font-size:11px; cursor:pointer; }
 .proposal-actions button.apply { border-color:#f6a500; color:#17110a; background:var(--amber); font-weight:700; }
+.proposal-actions button:disabled { cursor:not-allowed; opacity:.38; }
 .properties-card { margin:0 9px 12px; border:1px solid #34404b; border-radius:7px; overflow:hidden; background:#0d151e; } .properties-card.expanded { margin-top:12px; }
 .properties-heading { height:43px; display:flex; align-items:center; justify-content:space-between; padding:0 13px; border-bottom:1px solid #34404b; } .properties-heading h3 { margin:0; font-size:14px; } .properties-heading span { color:#8e98a2; font-size:11px; }
 .live-properties { display:grid; gap:9px; padding:12px; border-bottom:1px solid #26323d; background:#0a121a; }
