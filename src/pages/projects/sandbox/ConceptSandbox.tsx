@@ -18,6 +18,7 @@ import {
   type CanvasElementKind,
   type SandboxDocument,
 } from "./sandboxPersistence";
+import { analyseSandboxPrompt, type SandboxAiProposal, type SandboxAiOperation } from "./sandboxAi";
 
 type ElementItem = { name: CanvasElementKind; icon: typeof Type };
 type EditorHistory = { past: CanvasElement[][]; present: CanvasElement[]; future: CanvasElement[][] };
@@ -50,6 +51,19 @@ const elementDefaults: Record<CanvasElementKind, Pick<CanvasElement, "content" |
 
 const emptyHistory: EditorHistory = { past: [], present: [], future: [] };
 
+function makeCanvasElement(type: CanvasElementKind, current: CanvasElement[], content?: string, x?: number, y?: number): CanvasElement {
+  const defaults = elementDefaults[type];
+  return {
+    id: `${type.toLowerCase()}-${crypto.randomUUID()}`,
+    type,
+    name: `${type} ${current.filter((entry) => entry.type === type).length + 1}`,
+    x: Math.max(8, x ?? 260),
+    y: Math.max(72, y ?? 260),
+    ...defaults,
+    content: content ?? defaults.content,
+  };
+}
+
 export default function ForgeSandbox() {
   const [activeTool, setActiveTool] = useState("Add");
   const [selectedLayer, setSelectedLayer] = useState("Hero");
@@ -58,7 +72,11 @@ export default function ForgeSandbox() {
   const [zoom, setZoom] = useState(100);
   const [bottomTab, setBottomTab] = useState("Activity");
   const [prompt, setPrompt] = useState("Turn this hero into two columns and add a booking button");
-  const [proposal, setProposal] = useState<"ready" | "applied" | "rejected">("ready");
+  const [proposalStatus, setProposalStatus] = useState<"ready" | "applied" | "rejected">("ready");
+  const [aiProposal, setAiProposal] = useState<SandboxAiProposal | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [promptBuilderOpen, setPromptBuilderOpen] = useState(false);
+  const [promptBrief, setPromptBrief] = useState({ goal: "generate more enquiries", audience: "small business owners", style: "modern and confident", section: "hero and trust section", action: "Book a consultation" });
   const [dragging, setDragging] = useState<string | null>(null);
   const [history, setHistory] = useState<EditorHistory>(emptyHistory);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -158,14 +176,13 @@ export default function ForgeSandbox() {
     const item = (event.dataTransfer.getData("text/forge-element") || dragging) as CanvasElementKind;
     if (!item || !elementDefaults[item]) return;
     const defaults = elementDefaults[item];
-    const element: CanvasElement = {
-      id: `${item.toLowerCase()}-${crypto.randomUUID()}`,
-      type: item,
-      name: `${item} ${history.present.filter((entry) => entry.type === item).length + 1}`,
-      x: Math.min(900 - defaults.width - 8, Math.max(8, x - defaults.width / 2)),
-      y: Math.max(72, y - defaults.height / 2),
-      ...defaults,
-    };
+    const element = makeCanvasElement(
+      item,
+      history.present,
+      defaults.content,
+      Math.min(900 - defaults.width - 8, Math.max(8, x - defaults.width / 2)),
+      Math.max(72, y - defaults.height / 2),
+    );
     commitElements((current) => [...current, element]);
     setDragging(null);
     setSelectedLayer(element.name);
@@ -193,6 +210,62 @@ export default function ForgeSandbox() {
     setSelectedElementId(copy.id);
     setSelectedLayer(copy.name);
     notify("Element duplicated");
+  };
+
+  const requestAiProposal = async () => {
+    if (!prompt.trim()) return notify("Describe the change you want first");
+    setAiBusy(true);
+    setProposalStatus("ready");
+    try {
+      const nextProposal = await analyseSandboxPrompt(prompt, { elements: history.present, selectedElement, viewport });
+      setAiProposal(nextProposal);
+      notify(`${nextProposal.changes.length} change${nextProposal.changes.length === 1 ? "" : "s"} proposed`);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const applyAiOperations = (operations: SandboxAiOperation[], current: CanvasElement[]) => {
+    let next = [...current];
+    let lastSelectedId: string | null = null;
+    operations.forEach((operation, index) => {
+      if (operation.kind === "add") {
+        const element = makeCanvasElement(operation.elementType, next, operation.content, operation.x ?? 220 + index * 34, operation.y ?? 230 + index * 38);
+        next.push(element);
+        lastSelectedId = element.id;
+      }
+      if (operation.kind === "update") {
+        next = next.map((element) => element.id === operation.elementId ? { ...element, ...operation.patch } : element);
+        lastSelectedId = operation.elementId;
+      }
+      if (operation.kind === "delete") next = next.filter((element) => element.id !== operation.elementId);
+      if (operation.kind === "duplicate") {
+        const source = next.find((element) => element.id === operation.elementId);
+        if (source) {
+          const copy = { ...source, id: `${source.type.toLowerCase()}-${crypto.randomUUID()}`, name: `${source.name} copy`, x: source.x + 18, y: source.y + 18 };
+          next.push(copy);
+          lastSelectedId = copy.id;
+        }
+      }
+    });
+    return { next, lastSelectedId };
+  };
+
+  const applyAiProposal = () => {
+    if (!aiProposal) return;
+    const result = applyAiOperations(aiProposal.operations, history.present);
+    commitElements(result.next);
+    const viewportChange = aiProposal.operations.find((operation) => operation.kind === "viewport");
+    if (viewportChange?.kind === "viewport") setViewport(viewportChange.viewport);
+    if (result.lastSelectedId) setSelectedElementId(result.lastSelectedId);
+    setProposalStatus("applied");
+    notify("AI changes applied to the canvas");
+  };
+
+  const buildPrompt = () => {
+    setPrompt(`Improve this ${promptBrief.section} for ${promptBrief.audience}. The goal is to ${promptBrief.goal}. Use a ${promptBrief.style} visual style and make “${promptBrief.action}” the primary call to action. Keep the result responsive and accessible.`);
+    setPromptBuilderOpen(false);
+    notify("Prompt added — review it, then generate changes");
   };
 
   return (
@@ -279,7 +352,7 @@ export default function ForgeSandbox() {
                   <div className="site-links"><span>Product</span><span>Solutions⌄</span><span>Resources</span><span>Pricing</span><span>About</span></div>
                   <div className="site-nav-actions"><button>Sign in</button><button>Start Building</button></div>
                 </nav>
-                <section className={`site-hero ${proposal === "applied" ? "applied" : ""}`} onClick={() => { setSelectedLayer("Hero"); setSelectedElementId(null); }}>
+                <section className={`site-hero ${proposalStatus === "applied" ? "applied" : ""}`} onClick={() => { setSelectedLayer("Hero"); setSelectedElementId(null); }}>
                   <div className="hero-copy">
                     <span className="eyebrow">AI-POWERED WEBSITE BUILDER</span>
                     <h1>Build smarter.<br />Ship faster.</h1>
@@ -329,11 +402,23 @@ export default function ForgeSandbox() {
           <div className="right-tabs"><button className={rightTab === "ai" ? "active" : ""} onClick={() => setRightTab("ai")}>AI Assistant</button><button className={rightTab === "properties" ? "active" : ""} onClick={() => setRightTab("properties")}>Properties</button></div>
           {rightTab === "ai" && (
             <>
-              <div className="ai-prompt-box"><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /><button onClick={() => { setProposal("ready"); notify("AI proposal refreshed"); }}><Send size={17} /></button></div>
-              <div className={`proposal-card ${proposal}`}>
-                <h3><Sparkles size={18} /> {proposal === "applied" ? "Changes applied" : proposal === "rejected" ? "Changes rejected" : "Proposed changes"}</h3>
-                {["Two-column hero", "Booking CTA", "Responsive spacing"].map((item) => <p key={item}><span><Check size={12} /></span>{item}</p>)}
-                <div className="proposal-actions"><button onClick={() => notify("Change preview active")}>Preview changes</button><button className="apply" onClick={() => { setProposal("applied"); notify("AI changes applied"); }}>Apply</button><button onClick={() => { setProposal("rejected"); notify("Proposal rejected"); }}>Reject</button></div>
+              <div className="ai-prompt-box"><textarea aria-label="AI website instruction" value={prompt} onChange={(event) => setPrompt(event.target.value)} /><button disabled={aiBusy} onClick={() => void requestAiProposal()}>{aiBusy ? <RotateCcw className="spin" size={17} /> : <Send size={17} />}</button></div>
+              <div className="ai-tools-row"><button onClick={() => setPromptBuilderOpen((open) => !open)}><Sparkles size={14} />Prompt Builder</button><span>{aiProposal?.source === "forge-ai" ? "Forge AI" : "Smart local mode"}</span></div>
+              {promptBuilderOpen && (
+                <div className="prompt-builder">
+                  <div className="prompt-builder-heading"><strong>Build a better instruction</strong><button onClick={() => setPromptBuilderOpen(false)}><X size={14} /></button></div>
+                  <label>Goal<input value={promptBrief.goal} onChange={(event) => setPromptBrief((brief) => ({ ...brief, goal: event.target.value }))} /></label>
+                  <label>Audience<input value={promptBrief.audience} onChange={(event) => setPromptBrief((brief) => ({ ...brief, audience: event.target.value }))} /></label>
+                  <label>Style<input value={promptBrief.style} onChange={(event) => setPromptBrief((brief) => ({ ...brief, style: event.target.value }))} /></label>
+                  <label>Section<input value={promptBrief.section} onChange={(event) => setPromptBrief((brief) => ({ ...brief, section: event.target.value }))} /></label>
+                  <label>Primary action<input value={promptBrief.action} onChange={(event) => setPromptBrief((brief) => ({ ...brief, action: event.target.value }))} /></label>
+                  <button className="build-prompt-button" onClick={buildPrompt}>Use this prompt</button>
+                </div>
+              )}
+              <div className={`proposal-card ${proposalStatus} ${aiProposal ? "has-proposal" : "empty"}`}>
+                <h3><Sparkles size={18} /> {proposalStatus === "applied" ? "Changes applied" : proposalStatus === "rejected" ? "Changes rejected" : aiProposal ? aiProposal.title : "Ready for instructions"}</h3>
+                {aiProposal ? aiProposal.changes.map((item) => <p key={item}><span><Check size={12} /></span>{item}</p>) : <small>Describe a change or use Prompt Builder. Forge will prepare a reviewable plan before touching the canvas.</small>}
+                <div className="proposal-actions"><button disabled={!aiProposal} onClick={() => notify(aiProposal?.summary ?? "Create a proposal first")}>Preview changes</button><button disabled={!aiProposal || proposalStatus === "applied"} className="apply" onClick={applyAiProposal}>Apply</button><button disabled={!aiProposal} onClick={() => { setProposalStatus("rejected"); notify("Proposal rejected"); }}>Reject</button></div>
               </div>
             </>
           )}
