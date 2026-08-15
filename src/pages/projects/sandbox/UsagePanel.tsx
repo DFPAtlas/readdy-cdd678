@@ -12,7 +12,7 @@ import {
 type UsagePanelProps = { onNotify: (message: string) => void };
 
 const PLAN_BADGES: Record<PlanKey, string> = {
-  free: 'Free', starter: 'Starter', pro: 'Pro', agency: 'Agency',
+  free: 'Free', starter: 'Starter', builder: 'Builder', pro: 'Pro', agency: 'Agency',
 };
 
 const ENTITLEMENT_KEYS = [
@@ -212,7 +212,7 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
                 <div className="fb-row">
                   <label className="fb-label">Plan
                     <select value={entPlan} onChange={(e) => setEntPlan(e.target.value as PlanKey)}>
-                      <option value="free">Free</option><option value="starter">Starter</option><option value="pro">Pro</option><option value="agency">Agency</option>
+                      <option value="free">Free</option><option value="starter">Starter</option><option value="builder">Builder</option><option value="pro">Pro</option><option value="agency">Agency</option>
                     </select>
                   </label>
                   <label className="fb-label">Entitlement
