@@ -5,10 +5,10 @@ import Stripe from 'npm:stripe@22';
 /* ──────────────────────────────────────────────────────────────
    Forge Create Checkout — authenticated Stripe Checkout + Portal.
 
-   Everything is resolved server-side. The browser only ever receives
-   a hosted URL; it never sees a price ID, customer ID, secret, or any
-   Stripe object. Stripe remains the source of truth for payment state,
-   Supabase for the effective plan and entitlements.
+   Everything is resolved server-side. The browser receives either a
+   hosted URL or a short-lived Elements client secret; it never sees a
+   price ID, customer ID, restricted key, or Stripe object. Stripe remains
+   the source of truth for payment state, Supabase for entitlements.
 
    API version is pinned to 2026-06-24.dahlia (supported by stripe-node
    v22.3.0+). This enables `integration_identifier` as a real top-level
@@ -208,6 +208,7 @@ serve(async (req) => {
   const portalReturnUrl = `${appOrigin}/pricing?billing=portal-return`;
 
   const action = typeof body.action === 'string' ? body.action : 'checkout';
+  const embeddedElements = action === 'checkout_elements';
 
   /* ── Customer Portal ──
      Requires an existing billing customer AND an active or historical
@@ -301,8 +302,6 @@ serve(async (req) => {
     mode: 'subscription',
     customer: customerId,
     line_items: [{ price: price.id, quantity: 1 }],
-    success_url: successUrl,
-    cancel_url: cancelUrl,
     client_reference_id: userId,
     integration_identifier: integrationIdentifier,
     metadata: {
@@ -319,6 +318,15 @@ serve(async (req) => {
     },
   };
 
+  if (embeddedElements) {
+    sessionParams.ui_mode = 'elements';
+    sessionParams.return_url = `${appOrigin}/checkout/complete`;
+    sessionParams.customer_update = { address: 'auto', name: 'auto' };
+  } else {
+    sessionParams.success_url = successUrl;
+    sessionParams.cancel_url = cancelUrl;
+  }
+
   // Tax stays disabled until the business opts in explicitly.
   if (ENABLE_AUTOMATIC_TAX) {
     sessionParams.automatic_tax = { enabled: true };
@@ -329,6 +337,36 @@ serve(async (req) => {
     session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
   } catch {
     return error(requestId, 'STRIPE_ERROR', 'Could not start checkout.', 502, cors);
+  }
+
+  if (embeddedElements) {
+    if (!session.client_secret) {
+      return error(requestId, 'CHECKOUT_SESSION_INVALID', 'Stripe did not return a secure checkout session.', 502, cors);
+    }
+
+    const { data: entitlementRows } = await admin
+      .from('plan_entitlements')
+      .select('entitlement_key, limit_value')
+      .eq('plan_key', planKey)
+      .eq('active', true);
+    const entitlements = Object.fromEntries(
+      (entitlementRows ?? []).map((row) => [row.entitlement_key, row.limit_value]),
+    );
+
+    // Grant nothing here — access is derived from the signed webhook.
+    return json({
+      requestId,
+      code: 'OK',
+      clientSecret: session.client_secret,
+      checkout: {
+        planKey,
+        billingInterval,
+        amount: price.unit_amount,
+        currency: price.currency,
+        email,
+        entitlements,
+      },
+    }, 200, cors);
   }
 
   // Grant nothing here — access is derived from the webhook, never this response.

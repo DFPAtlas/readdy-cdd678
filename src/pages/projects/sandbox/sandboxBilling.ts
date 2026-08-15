@@ -33,7 +33,8 @@ export type SubscriptionStatus =
   | 'past_due'
   | 'unpaid'
   | 'paused'
-  | 'cancelled';
+  | 'canceled'
+  | 'incomplete_expired';
 
 export type PlanPrice = {
   amount: number;
@@ -123,7 +124,7 @@ async function invoke(action: string, body: Record<string, unknown> = {}): Promi
   }
 }
 
-async function invokeCheckout(action: 'checkout' | 'portal', body: Record<string, unknown> = {}): Promise<Record<string, unknown> | null> {
+async function invokeCheckout(action: 'checkout' | 'checkout_elements' | 'portal', body: Record<string, unknown> = {}): Promise<Record<string, unknown> | null> {
   const supabase = getSandboxClient();
   if (!supabase) return null;
   try {
@@ -169,21 +170,47 @@ export type CheckoutResult =
   | { ok: true; url: string }
   | { ok: false; errorCode: string; message: string };
 
-function freshUuid(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+export async function startCheckout(planKey: PlanKey, billingInterval: 'month' | 'year' = 'month'): Promise<CheckoutResult> {
+  if (planKey === 'free') return { ok: false, errorCode: 'INVALID_PLAN', message: 'The Free plan does not require checkout.' };
+  const query = new URLSearchParams({ plan: planKey, interval: billingInterval });
+  return { ok: true, url: `/checkout?${query.toString()}` };
 }
 
-export async function startCheckout(planKey: PlanKey, billingInterval: 'month' | 'year' = 'month'): Promise<CheckoutResult> {
-  const requestKey = freshUuid();
-  const data = await invokeCheckout('checkout', { planKey, billingInterval, requestKey });
+export type EmbeddedCheckoutSession = {
+  clientSecret: string;
+  planKey: Exclude<PlanKey, 'free'>;
+  billingInterval: 'month' | 'year';
+  amount: number;
+  currency: 'gbp';
+  email: string;
+  entitlements: Partial<Record<EntitlementKey, number | null>>;
+};
+
+export type EmbeddedCheckoutResult =
+  | { ok: true; session: EmbeddedCheckoutSession }
+  | { ok: false; errorCode: string; message: string };
+
+export async function createEmbeddedCheckoutSession(
+  planKey: Exclude<PlanKey, 'free'>,
+  billingInterval: 'month' | 'year',
+  requestKey: string,
+): Promise<EmbeddedCheckoutResult> {
+  const data = await invokeCheckout('checkout_elements', { planKey, billingInterval, requestKey });
   if (!data) return { ok: false, errorCode: 'NOT_CONFIGURED', message: 'Billing is not configured.' };
-  if (data.code === 'OK' && typeof data.url === 'string') return { ok: true, url: data.url };
-  return { ok: false, errorCode: String(data.errorCode ?? 'UNKNOWN'), message: String(data.message ?? 'Checkout unavailable.') };
+  if (data.code === 'OK' && typeof data.clientSecret === 'string' && data.checkout) {
+    return {
+      ok: true,
+      session: {
+        ...(data.checkout as Omit<EmbeddedCheckoutSession, 'clientSecret'>),
+        clientSecret: data.clientSecret,
+      },
+    };
+  }
+  return {
+    ok: false,
+    errorCode: String(data.errorCode ?? 'UNKNOWN'),
+    message: String(data.message ?? 'Checkout unavailable.'),
+  };
 }
 
 export async function openBillingPortal(): Promise<CheckoutResult> {
