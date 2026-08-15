@@ -7,9 +7,9 @@ import { getSandboxClient, resolveSandboxProject } from './sandboxPersistence';
    transports them — it never computes entitlements or money.
    ────────────────────────────────────────────────────────────── */
 
-export type PlanKey = 'free' | 'starter' | 'pro' | 'agency';
+export type PlanKey = 'free' | 'starter' | 'builder' | 'pro' | 'agency';
 
-export const PLAN_KEYS: PlanKey[] = ['free', 'starter', 'pro', 'agency'];
+export const PLAN_KEYS: PlanKey[] = ['free', 'starter', 'builder', 'pro', 'agency'];
 
 export type EntitlementKey =
   | 'max_active_projects'
@@ -103,10 +103,11 @@ export type CreditEstimate = {
 const FALLBACK_CATALOGUE: PlanCatalogue = {
   pricingConfigured: false,
   plans: [
-    { key: 'free', name: 'Free', description: 'For trying out Forge.', features: ['1 project', '5 pages', '300 AI credits / month'], sortOrder: 0, price: null, entitlements: {} },
-    { key: 'starter', name: 'Starter', description: 'For personal sites and side projects.', features: ['3 projects', '20 pages per project', '3,000 AI credits / month'], sortOrder: 1, price: null, entitlements: {} },
-    { key: 'pro', name: 'Pro', description: 'For professionals and client work.', features: ['10 projects', '100 pages per project', '15,000 AI credits / month'], sortOrder: 2, price: null, entitlements: {} },
-    { key: 'agency', name: 'Agency', description: 'For teams shipping many sites.', features: ['Unlimited projects & pages', '50 team members', '50,000 AI credits / month'], sortOrder: 3, price: null, entitlements: {} },
+    { key: 'free', name: 'Free', description: 'Try Forge before publishing.', features: ['150 trial AI credits', '3 pages per site', 'Preview only'], sortOrder: 0, price: null, entitlements: {} },
+    { key: 'starter', name: 'Starter', description: 'For a first live website.', features: ['1,000 AI credits / month', '10 pages per site', '1 published site'], sortOrder: 1, price: null, entitlements: {} },
+    { key: 'builder', name: 'Builder', description: 'For regular website building.', features: ['3,000 AI credits / month', '30 pages per site', '5 published sites'], sortOrder: 2, price: null, entitlements: {} },
+    { key: 'pro', name: 'Pro', description: 'For professionals and client work.', features: ['6,500 AI credits / month', '100 pages per site', '20 published sites'], sortOrder: 3, price: null, entitlements: {} },
+    { key: 'agency', name: 'Agency', description: 'For teams shipping at scale.', features: ['16,000 AI credits / month', '250 pages per site', '100 published sites'], sortOrder: 4, price: null, entitlements: {} },
   ],
 };
 
@@ -115,6 +116,18 @@ async function invoke(action: string, body: Record<string, unknown> = {}): Promi
   if (!supabase) return null;
   try {
     const { data, error } = await supabase.functions.invoke('forge-billing', { body: { action, ...body } });
+    if (error || !data) return null;
+    return data as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function invokeCheckout(action: 'checkout' | 'portal', body: Record<string, unknown> = {}): Promise<Record<string, unknown> | null> {
+  const supabase = getSandboxClient();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke('forge-create-checkout', { body: { action, ...body } });
     if (error || !data) return null;
     return data as Record<string, unknown>;
   } catch {
@@ -156,15 +169,15 @@ export type CheckoutResult =
   | { ok: true; url: string }
   | { ok: false; errorCode: string; message: string };
 
-export async function startCheckout(planKey: PlanKey): Promise<CheckoutResult> {
-  const data = await invoke('checkout', { planKey });
+export async function startCheckout(planKey: PlanKey, billingInterval: 'month' | 'year' = 'month'): Promise<CheckoutResult> {
+  const data = await invokeCheckout('checkout', { planKey, billingInterval });
   if (!data) return { ok: false, errorCode: 'NOT_CONFIGURED', message: 'Billing is not configured.' };
   if (data.code === 'OK' && typeof data.url === 'string') return { ok: true, url: data.url };
   return { ok: false, errorCode: String(data.errorCode ?? 'UNKNOWN'), message: String(data.message ?? 'Checkout unavailable.') };
 }
 
 export async function openBillingPortal(): Promise<CheckoutResult> {
-  const data = await invoke('portal');
+  const data = await invokeCheckout('portal');
   if (!data) return { ok: false, errorCode: 'NOT_CONFIGURED', message: 'Billing is not configured.' };
   if (data.code === 'OK' && typeof data.url === 'string') return { ok: true, url: data.url };
   return { ok: false, errorCode: String(data.errorCode ?? 'UNKNOWN'), message: String(data.message ?? 'Billing portal unavailable.') };
