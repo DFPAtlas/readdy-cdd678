@@ -1,16 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Bell, Box, Check, ChevronDown, CreditCard, FileText, Folder, Grid2X2,
-  HelpCircle, Layers3, LayoutTemplate, Loader2, Rocket, ShieldCheck, Star,
-  Tag, Users, Zap,
+  AlertTriangle, Bell, Box, Check, ChevronDown, CreditCard, FileText, Folder,
+  Globe, Grid2X2, HelpCircle, Layers3, LayoutTemplate, Link2, Loader2,
+  RefreshCw, Rocket, ShieldCheck, Star, Tag, Users, Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  fetchUsageSummary, openBillingPortal, startCheckout,
-  type PlanKey, type UsageSummary,
+  fetchPlanCatalogue, fetchUsageSummary, openBillingPortal, startCheckout,
+  type PlanCatalogue, type PlanKey, type UsageSummary,
 } from '@/pages/projects/sandbox/sandboxBilling';
 import './pricing-page.css';
+
+/* ──────────────────────────────────────────────────────────────
+   Forge Pricing — approved billing contract (static display) wired
+   to the server-controlled catalogue + usage summary. The browser
+   never computes money from input and never sends a Stripe price ID;
+   checkout is gated on the server reporting pricing configured.
+   ────────────────────────────────────────────────────────────── */
 
 type DisplayPlan = {
   key: PlanKey;
@@ -23,6 +30,7 @@ type DisplayPlan = {
   popular?: boolean;
 };
 
+/* Approved billing contract — the single source of truth for display. */
 const PLANS: DisplayPlan[] = [
   { key: 'free', name: 'Free', monthlyPrice: 0, credits: '150 trial credits', pages: '3 pages per site', publishing: 'Preview only', icon: Box },
   { key: 'starter', name: 'Starter', monthlyPrice: 19, credits: '1,000 AI credits', pages: '10 pages per site', publishing: '1 published site', icon: Rocket },
@@ -30,6 +38,23 @@ const PLANS: DisplayPlan[] = [
   { key: 'pro', name: 'Pro', monthlyPrice: 99, credits: '6,500 AI credits', pages: '100 pages per site', publishing: '20 published sites', icon: Star },
   { key: 'agency', name: 'Agency', monthlyPrice: 249, credits: '16,000 AI credits', pages: '250 pages per site', publishing: '100 published sites', icon: Users },
 ];
+
+const METER_ICONS: Record<string, typeof Zap> = {
+  ai_credits: Zap,
+  projects: Folder,
+  pages: FileText,
+  team_members: Users,
+  published_sites: Globe,
+  custom_domains: Link2,
+};
+
+const ACTIVE_SUB_STATUSES = ['active', 'trialing', 'past_due'] as const;
+const CONFIRM_TIMEOUT_MS = 30000;
+const INTENT_KEY = 'forge_checkout_intent';
+
+type NoticeKind = 'info' | 'success' | 'error';
+type Notice = { kind: NoticeKind; text: string };
+type ConfirmState = 'idle' | 'confirming' | 'confirmed' | 'timeout';
 
 function ForgePricingLogo() {
   return <span className="forge-pricing-logo" aria-label="Forge"><i aria-hidden="true" /><b>Forge</b></span>;
@@ -40,52 +65,191 @@ function percentage(used: number, limit: number | null): number {
   return Math.min(100, Math.round((used / limit) * 100));
 }
 
+function statusLabel(status: string | null): string {
+  switch (status) {
+    case 'active': return 'Active';
+    case 'trialing': return 'Trial';
+    case 'past_due': return 'Past due';
+    case 'unpaid': return 'Unpaid';
+    case 'paused': return 'Paused';
+    case 'canceled':
+    case 'cancelled': return 'Canceled';
+    case 'incomplete':
+    case 'incomplete_expired': return 'Incomplete';
+    default: return 'Free plan';
+  }
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+function readIntent(): { planKey?: PlanKey; interval?: 'month' | 'year' } | null {
+  try {
+    const raw = window.sessionStorage.getItem(INTENT_KEY);
+    return raw ? JSON.parse(raw) as { planKey?: PlanKey; interval?: 'month' | 'year' } : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearIntent(): void {
+  try { window.sessionStorage.removeItem(INTENT_KEY); } catch { /* best-effort */ }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isConfirmedSummary(summary: UsageSummary): boolean {
+  const active = summary.subscriptionStatus === 'active' || summary.subscriptionStatus === 'trialing';
+  if (!active || summary.planKey === 'free') return false;
+  const intent = readIntent();
+  if (intent?.planKey && intent.planKey !== summary.planKey) return false;
+  return true;
+}
+
+async function pollForConfirmation(): Promise<UsageSummary | null> {
+  const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+  let delay = 750;
+  while (Date.now() < deadline) {
+    await sleep(delay);
+    const summary = await fetchUsageSummary();
+    if (summary && isConfirmedSummary(summary)) return summary;
+    delay = Math.min(delay * 2, 4000);
+  }
+  return null;
+}
+
 export default function PricingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [interval, setInterval] = useState<'month' | 'year'>('month');
-  const [usage, setUsage] = useState<UsageSummary | null>(null);
-  const [busy, setBusy] = useState<PlanKey | 'portal' | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [interval, setIntervalState] = useState<'month' | 'year'>('month');
+  const [catalogue, setCatalogue] = useState<PlanCatalogue | null>(null);
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmState>('idle');
+
+  const pricingConfigured = catalogue?.pricingConfigured === true;
+  const hasActiveSubscription = !!summary?.subscriptionStatus
+    && (ACTIVE_SUB_STATUSES as readonly string[]).includes(summary.subscriptionStatus as string);
+  const currentPlanKey: PlanKey = summary?.planKey ?? 'free';
+  const subscriptionStatus = summary?.subscriptionStatus ?? null;
+  const renewalDate = summary?.renewalDate ?? null;
+
+  async function loadData(): Promise<UsageSummary | null> {
+    const [cat, sum] = await Promise.all([fetchPlanCatalogue(), fetchUsageSummary()]);
+    setCatalogue(cat);
+    setSummary(sum);
+    return sum;
+  }
+
+  async function runConfirmation(): Promise<void> {
+    setConfirmState('confirming');
+    setNotice(null);
+    const confirmed = await pollForConfirmation();
+    if (confirmed) {
+      setSummary(confirmed);
+      setConfirmState('confirmed');
+      clearIntent();
+      setNotice({ kind: 'success', text: 'Subscription confirmed. Your Forge limits have been updated.' });
+    } else {
+      setConfirmState('timeout');
+    }
+  }
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
-    const billingResult = new URLSearchParams(window.location.search).get('billing');
-    if (billingResult === 'success') setNotice('Subscription confirmed. Your Forge limits are being refreshed.');
-    if (billingResult === 'cancelled') setNotice('Checkout cancelled. Your current plan has not changed.');
-    void fetchUsageSummary().then(setUsage);
+    const intent = readIntent();
+    if (intent?.interval === 'month' || intent?.interval === 'year') setIntervalState(intent.interval);
+
+    void loadData();
+
+    const billing = searchParams.get('billing');
+    if (billing === 'success') {
+      void runConfirmation();
+    } else if (billing === 'cancelled') {
+      clearIntent();
+      setNotice({ kind: 'info', text: 'Checkout cancelled. Your current plan has not changed.' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const creditMeter = useMemo(() => usage?.meters.find((meter) => meter.key === 'ai_credits') ?? null, [usage]);
-  const pageMeter = useMemo(() => usage?.meters.find((meter) => meter.key === 'pages') ?? null, [usage]);
+  async function handleManageBilling(): Promise<void> {
+    if (busy) return;
+    setBusy('portal');
+    setNotice(null);
+    try {
+      const result = await openBillingPortal();
+      if (result.ok) {
+        window.location.assign(result.url);
+        return;
+      }
+      setNotice({ kind: 'error', text: result.message });
+    } finally {
+      setBusy(null);
+    }
+  }
 
-  const choosePlan = async (plan: DisplayPlan) => {
-    if (plan.key === 'free') {
-      navigate(isAuthenticated ? '/projects/new' : '/login');
-      return;
-    }
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
+  async function handleCheckout(plan: DisplayPlan): Promise<void> {
+    if (busy) return;
     setBusy(plan.key);
     setNotice(null);
-    const result = await startCheckout(plan.key, interval);
-    setBusy(null);
-    if (result.ok) window.location.assign(result.url);
-    else setNotice(result.message);
-  };
+    try {
+      try { window.sessionStorage.setItem(INTENT_KEY, JSON.stringify({ planKey: plan.key, interval })); } catch { /* best-effort */ }
+      const result = await startCheckout(plan.key, interval);
+      if (result.ok) {
+        window.location.assign(result.url);
+        return;
+      }
+      setNotice({ kind: 'error', text: result.message });
+    } finally {
+      setBusy(null);
+    }
+  }
 
-  const manageBilling = async () => {
-    setBusy('portal');
-    const result = await openBillingPortal();
-    setBusy(null);
-    if (result.ok) window.location.assign(result.url);
-    else setNotice(result.message);
-  };
+  function onPlanClick(plan: DisplayPlan): void {
+    if (busy) return;
+
+    if (hasActiveSubscription) {
+      void handleManageBilling();
+      return;
+    }
+
+    if (plan.key === 'free') {
+      if (!isAuthenticated) navigate('/login');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      try { window.sessionStorage.setItem(INTENT_KEY, JSON.stringify({ planKey: plan.key, interval })); } catch { /* best-effort */ }
+      navigate('/login?redirect=/pricing');
+      return;
+    }
+
+    if (!pricingConfigured) {
+      setNotice({ kind: 'error', text: 'Billing is not configured yet. Please try again shortly.' });
+      return;
+    }
+
+    void handleCheckout(plan);
+  }
+
+  const NoticeIcon = notice?.kind === 'error' ? AlertTriangle : ShieldCheck;
 
   return (
     <div className="forge-pricing-page">
+      <noscript>
+        <div className="forge-pricing-notice">Forge billing requires JavaScript. Please enable JavaScript to manage your subscription.</div>
+      </noscript>
+
       <header className="forge-pricing-header">
         <button type="button" className="forge-pricing-home" onClick={() => navigate('/')}><ForgePricingLogo /></button>
         <nav aria-label="Primary navigation">
@@ -103,18 +267,61 @@ export default function PricingPage() {
           <h1>Build more. Pay only for the AI you use.</h1>
           <p>Every plan includes the visual Forge workspace. Upgrade for more AI credits, pages and published websites.</p>
           <div className="forge-billing-toggle" role="group" aria-label="Billing interval">
-            <button type="button" className={interval === 'month' ? 'active' : ''} onClick={() => setInterval('month')}>Monthly</button>
-            <button type="button" className={interval === 'year' ? 'active' : ''} onClick={() => setInterval('year')}>Yearly — Save 2 months</button>
+            <button type="button" aria-pressed={interval === 'month'} className={interval === 'month' ? 'active' : ''} onClick={() => setIntervalState('month')}>Monthly</button>
+            <button type="button" aria-pressed={interval === 'year'} className={interval === 'year' ? 'active' : ''} onClick={() => setIntervalState('year')}>Yearly — Save 2 months</button>
           </div>
         </section>
 
-        {notice && <div className="forge-pricing-notice" role="status"><ShieldCheck />{notice}<button type="button" onClick={() => setNotice(null)}>×</button></div>}
+        {confirmState === 'confirming' && (
+          <div className="forge-pricing-notice" role="status" aria-live="polite"><Loader2 className="spin" />Confirming your subscription…</div>
+        )}
 
-        <section className="forge-plan-grid" aria-label="Forge subscription plans">
+        {confirmState === 'timeout' && (
+          <div className="forge-pricing-notice forge-pricing-notice--warn" role="status" aria-live="polite">
+            <AlertTriangle />
+            <span><strong>Payment received; subscription confirmation is still processing.</strong> It can take a moment after checkout.</span>
+            <span className="forge-confirm-actions">
+              <button type="button" onClick={() => void runConfirmation()}><RefreshCw />Refresh</button>
+              <button type="button" onClick={() => void handleManageBilling()}>Manage billing</button>
+            </span>
+          </div>
+        )}
+
+        {notice && confirmState !== 'confirming' && confirmState !== 'timeout' && (
+          <div className={`forge-pricing-notice${notice.kind === 'error' ? ' forge-pricing-notice--error' : ''}`} role="status" aria-live="polite">
+            <NoticeIcon />{notice.text}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">×</button>
+          </div>
+        )}
+
+        <section className="forge-plan-grid" aria-label="Forge subscription plans" aria-busy={busy !== null}>
           {PLANS.map((plan) => {
             const Icon = plan.icon;
             const price = interval === 'year' ? plan.monthlyPrice * 10 : plan.monthlyPrice;
-            const current = usage?.planKey === plan.key;
+            const current = currentPlanKey === plan.key;
+
+            let label: string;
+            let disabled = false;
+            let loading = false;
+
+            if (hasActiveSubscription) {
+              label = 'Manage billing';
+              disabled = busy !== null;
+              loading = busy === 'portal';
+            } else if (plan.key === 'free') {
+              if (!isAuthenticated) { label = 'Start free'; disabled = busy !== null; }
+              else { label = 'Current plan'; disabled = true; }
+            } else if (!isAuthenticated) {
+              label = `Choose ${plan.name}`;
+              disabled = busy !== null;
+            } else if (!pricingConfigured) {
+              label = 'Unavailable';
+              disabled = true;
+            } else {
+              label = `Choose ${plan.name}`;
+              disabled = busy !== null;
+              loading = busy === plan.key;
+            }
+
             return (
               <article key={plan.key} className={`${plan.popular ? 'popular' : ''}${current ? ' current' : ''}`}>
                 {plan.popular && <span className="forge-popular-tag">MOST POPULAR</span>}
@@ -124,8 +331,14 @@ export default function PricingPage() {
                 <div className="forge-plan-price"><strong>£{price}</strong>{plan.monthlyPrice > 0 && <span>/{interval === 'year' ? 'yr' : 'mo'}</span>}</div>
                 {interval === 'year' && plan.monthlyPrice > 0 && <p className="forge-plan-saving">Equivalent to £{Math.round((price / 12) * 100) / 100}/month</p>}
                 <ul><li><Check />{plan.credits}</li><li><Check />{plan.pages}</li><li><Check />{plan.publishing}</li></ul>
-                <button type="button" className={plan.popular ? 'primary' : ''} disabled={busy !== null || current} onClick={() => void choosePlan(plan)}>
-                  {busy === plan.key ? <Loader2 className="spin" /> : current ? 'Current plan' : plan.key === 'free' ? 'Start free' : `Choose ${plan.name}`}
+                <button
+                  type="button"
+                  className={plan.popular ? 'primary' : ''}
+                  disabled={disabled}
+                  aria-label={`${label} — ${plan.name} plan`}
+                  onClick={() => onPlanClick(plan)}
+                >
+                  {loading ? <Loader2 className="spin" /> : label}
                 </button>
               </article>
             );
@@ -136,19 +349,52 @@ export default function PricingPage() {
           <article className="forge-credit-card">
             <div className="forge-credit-icon"><Zap /></div><div><h2>Need more power?</h2><p>Buy extra AI credits anytime — they never interrupt your build.</p><button type="button" onClick={() => navigate('/dashboard')}>Buy AI credits</button></div>
           </article>
+
           <article className="forge-live-usage">
-            {creditMeter && pageMeter ? (
-              <>
-                <div className="forge-usage-meter"><div><span className="green"><Zap /></span><strong>{Math.max(0, (creditMeter.limit ?? creditMeter.used) - creditMeter.used).toLocaleString()}</strong><p>credits remaining</p></div><div className="forge-meter-track"><span style={{ width: `${percentage(creditMeter.used, creditMeter.limit)}%` }} /></div><footer><span>0</span><span>{creditMeter.limit?.toLocaleString() ?? 'Unlimited'}</span></footer></div>
-                <div className="forge-usage-meter"><div><span><FileText /></span><strong>{pageMeter.used}</strong><p>of {pageMeter.limit ?? '∞'} pages used</p></div><div className="forge-meter-track"><span style={{ width: `${percentage(pageMeter.used, pageMeter.limit)}%` }} /></div><footer><span>0</span><span>{pageMeter.limit ?? 'Unlimited'}</span></footer></div>
-              </>
+            <div className="forge-usage-header">
+              <h3>Your live usage</h3>
+              {(subscriptionStatus || renewalDate) && (
+                <div className="forge-usage-status" aria-label="Subscription status">
+                  <span className={`dot${subscriptionStatus === 'past_due' ? ' past-due' : ''}`} aria-hidden="true" />
+                  <span>{statusLabel(subscriptionStatus)}</span>
+                  {renewalDate && <span>· renews {formatDate(renewalDate)}</span>}
+                </div>
+              )}
+            </div>
+
+            {summary && summary.meters.length > 0 ? (
+              <div className="forge-usage-grid">
+                {summary.meters.map((meter) => {
+                  const MeterIcon = METER_ICONS[meter.key] ?? Zap;
+                  const remaining = meter.limit == null ? meter.used : Math.max(0, meter.limit - meter.used);
+                  const pct = percentage(meter.used, meter.limit);
+                  return (
+                    <div className="forge-usage-tile" key={meter.key}>
+                      <div className="forge-usage-tile-head">
+                        <span className={meter.key === 'ai_credits' ? 'green' : ''}><MeterIcon /></span>
+                        <div>
+                          <strong>{remaining.toLocaleString()}</strong>
+                          <p>{meter.label}</p>
+                        </div>
+                      </div>
+                      <div className="forge-meter-track" role="progressbar" aria-label={meter.label} aria-valuemin={0} aria-valuemax={meter.limit ?? 100} aria-valuenow={meter.used}>
+                        <span style={{ width: `${pct}%` }} />
+                      </div>
+                      <footer>
+                        <span>{meter.used.toLocaleString()} used</span>
+                        <span>{meter.limit == null ? 'Unlimited' : `${meter.limit.toLocaleString()} ${meter.unit}`}</span>
+                      </footer>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="forge-usage-empty"><CreditCard /><div><h3>Your live usage</h3><p>Sign in and connect billing to see remaining credits and page usage here.</p><button type="button" onClick={() => navigate('/login')}>View my account</button></div></div>
+              <div className="forge-usage-empty"><CreditCard /><div><h3>Your live usage</h3><p>Sign in and connect billing to see remaining credits, projects, pages and domains here.</p><button type="button" onClick={() => navigate('/login')}>View my account</button></div></div>
             )}
           </article>
         </section>
 
-        <div className="forge-pricing-footnote"><ShieldCheck />AI usage protected by spend controls <button type="button" onClick={() => void manageBilling()} disabled={busy !== null}>{busy === 'portal' ? 'Opening…' : 'Manage billing'}</button></div>
+        <div className="forge-pricing-footnote"><ShieldCheck />AI usage protected by spend controls <button type="button" onClick={() => void handleManageBilling()} disabled={busy !== null || !hasActiveSubscription}>{busy === 'portal' ? 'Opening…' : 'Manage billing'}</button></div>
       </main>
     </div>
   );

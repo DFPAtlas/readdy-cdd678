@@ -33,6 +33,9 @@ import HelpPage from "@/pages/help/page";
 import ProjectRedirect from "@/pages/projects/redirect";
 import ProjectOverviewPage from "@/pages/projects/overview/page";
 import SandboxPage from "@/pages/projects/sandbox/page";
+import CmsPage from "@/pages/projects/cms/page";
+import MembersPage from "@/pages/projects/members/page";
+import WorkflowsPage from "@/pages/projects/workflows/page";
 import FilesPage from "@/pages/projects/files/page";
 import AssetsPage from "@/pages/projects/assets/page";
 import BuildsPage from "@/pages/projects/builds/page";
@@ -90,6 +93,9 @@ const routes: RouteObject[] = [
     children: [
       { path: "/projects/:projectId", element: <ProjectRedirect /> },
       { path: "/projects/:projectId/overview", element: <ProjectOverviewPage /> },
+      { path: "/projects/:projectId/cms", element: <CmsPage /> },
+      { path: "/projects/:projectId/members", element: <MembersPage /> },
+      { path: "/projects/:projectId/workflows", element: <WorkflowsPage /> },
       { path: "/projects/:projectId/files", element: <FilesPage /> },
       { path: "/projects/:projectId/assets", element: <AssetsPage /> },
       { path: "/projects/:projectId/builds", element: <BuildsPage /> },

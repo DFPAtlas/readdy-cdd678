@@ -44,7 +44,6 @@ async function isUnsafeUrl(raw: string): Promise<boolean> {
     const url = new URL(raw);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return true;
     if (isUnsafeHost(url.hostname)) return true;
-    // Re-resolve DNS to defend against DNS rebinding.
     const resolved = await Deno.resolveDns(url.hostname, 'A').catch(() => []);
     const resolvedAAAA = await Deno.resolveDns(url.hostname, 'AAAA').catch(() => []);
     const ips = [...resolved, ...resolvedAAAA];
@@ -98,7 +97,7 @@ function countUrls(text: string): number {
   return (text.match(/https?:\/\//gi) ?? []).length;
 }
 
-/* ─── In-memory rate limiter (per-instance; a durable store would back this in production) ─── */
+/* ─── In-memory rate limiter (per-instance) ─── */
 
 const rateBuckets = new Map<string, { count: number; windowStart: number }>();
 function rateLimited(key: string, limit: number, windowMs: number): boolean {
@@ -120,7 +119,6 @@ function validateSubmission(fields: Record<string, unknown>, schema: Array<{ key
   const sanitized: Record<string, unknown> = {};
   let urlCount = 0;
 
-  // Reject unknown fields.
   const known = new Set(schema.map((f) => f.key));
   for (const key of Object.keys(fields)) {
     if (!known.has(key)) {
@@ -144,10 +142,9 @@ function validateSubmission(fields: Record<string, unknown>, schema: Array<{ key
       continue;
     }
 
-    if (type === 'file') continue; // handled separately via multipart/files array
+    if (type === 'file') continue;
 
     if (Array.isArray(raw)) {
-      // checkbox groups
       const arr = raw.map((v) => sanitizeText(v, 500)).filter(Boolean);
       if (required && arr.length === 0) errors[field.key] = 'Select at least one option.';
       sanitized[field.key] = arr;
@@ -172,14 +169,12 @@ function validateSubmission(fields: Record<string, unknown>, schema: Array<{ key
         errors[field.key] = 'Consent is required.';
       }
     } else {
-      // text/textarea/select/radio/hidden
       const maxLen = typeof field.validation?.maxLength === 'number' ? Number(field.validation.maxLength) : MAX_TEXT_LENGTH;
       if (value.length > maxLen) errors[field.key] = `Must be ${maxLen} characters or fewer.`;
     }
     sanitized[field.key] = value;
   }
 
-  // Consent verification (operational consent).
   if (consentKey && sanitized[consentKey] !== 'true' && sanitized[consentKey] !== 'on' && sanitized[consentKey] !== '1') {
     errors[consentKey] = 'Consent is required to submit this form.';
   }
@@ -326,23 +321,19 @@ serve(async (req) => {
     return safeError(null, 'INVALID_REQUEST', 'Missing form or project identifier.');
   }
 
-  // Honeypot — silently accept but mark as spam, do not store as lead.
   const honeypot = typeof body.website_alt === 'string' ? body.website_alt : '';
   const honeypotHit = honeypot.trim().length > 0;
 
-  // Minimum completion-time check.
   if (Date.now() - startedAt < MIN_COMPLETION_MS && !honeypotHit) {
     return safeError(null, 'SPAM_DETECTED', 'Submission rejected.');
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Per-IP and per-form rate limiting.
   if (rateLimited(`${ipHash}`, 10, 60_000)) {
     return safeError(null, 'RATE_LIMITED', 'Too many submissions. Please wait and try again.', 429);
   }
 
-  // Resolve the form + project.
   const { data: form } = await admin
     .from('forms')
     .select('id, project_id, name, status, configuration, success_action, success_message, redirect_url')
@@ -353,6 +344,12 @@ serve(async (req) => {
   if (form.status !== 'active') return safeError(null, 'FORM_INACTIVE', 'This form is not accepting submissions.');
   if (rateLimited(`form:${form.id}`, 60, 60_000)) {
     return safeError(null, 'RATE_LIMITED', 'Too many submissions. Please wait and try again.', 429);
+  }
+
+  // ── Entitlement gate: monthly form-submission quota (server-controlled) ──
+  const { data: quota, error: quotaError } = await admin.rpc('check_form_submissions_limit', { p_project_id: projectId, p_extra: 1 });
+  if (!quotaError && quota && quota.allowed === false) {
+    return safeError(null, quota.error_code === 'PLAN_LIMIT_REACHED' ? 'PLAN_LIMIT_REACHED' : 'FEATURE_NOT_INCLUDED', 'This form has reached its monthly submission limit. Please try again later.', 429);
   }
 
   // Source domain must belong to the deployment (if a deployment is claimed).
@@ -375,7 +372,6 @@ serve(async (req) => {
     }
   }
 
-  // Load the declared field schema.
   const { data: fieldRows } = await admin
     .from('form_fields')
     .select('field_key, field_type, label, position, required, validation, configuration')
@@ -383,11 +379,9 @@ serve(async (req) => {
     .order('position', { ascending: true });
   const schema = (fieldRows ?? []).map((f) => ({ key: f.field_key, type: f.field_type, required: f.required, validation: (f.validation as Record<string, unknown>) ?? {} }));
 
-  // Identify consent field(s).
   const consentField = (fieldRows ?? []).find((f) => f.field_type === 'consent');
   const consentKey = consentField?.field_key ?? null;
 
-  // Turnstile verification (optional).
   const config = (form.configuration as Record<string, unknown>) ?? {};
   const turnstileEnabled = config.turnstileEnabled === true;
   if (turnstileEnabled) {
@@ -404,7 +398,6 @@ serve(async (req) => {
     }
   }
 
-  // Validate + sanitize fields.
   const submittedFields = (body.fields && typeof body.fields === 'object' ? body.fields : {}) as Record<string, unknown>;
   if (Object.keys(submittedFields).length > MAX_FIELDS) {
     return safeError(null, 'TOO_MANY_FIELDS', 'Too many fields submitted.');
@@ -414,7 +407,6 @@ serve(async (req) => {
     return json({ reference: null, code: 'ERROR', errorCode: 'VALIDATION_FAILED', message: 'Please fix the highlighted fields.', fieldErrors: result.errors }, 400, cors);
   }
 
-  // Consent data (versioned).
   const consentData = consentKey ? {
     fieldKey: consentKey,
     wording: typeof config.consentLabel === 'string' ? config.consentLabel : 'Consent to be contacted.',
@@ -423,7 +415,6 @@ serve(async (req) => {
     timestamp: new Date().toISOString(),
   } : null;
 
-  // Duplicate / idempotency detection.
   const reference = `FRM-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   if (idempotencyKey) {
     const contentHash = await hashValue(JSON.stringify(result.sanitized));
@@ -443,7 +434,6 @@ serve(async (req) => {
 
   const spamScore = honeypotHit ? 100 : (urlCountHits(result.sanitized) > MAX_URL_COUNT ? 90 : 0);
 
-  // Store the submission (service role bypasses RLS).
   const { data: submission, error: insertError } = await admin
     .from('form_submissions')
     .insert({
@@ -469,7 +459,6 @@ serve(async (req) => {
     return safeError(null, 'STORE_FAILED', 'The submission could not be saved.', 500);
   }
 
-  // Queue notifications + integrations (non-blocking; a failure never drops the submission).
   const { data: integrations } = await admin
     .from('form_integrations')
     .select('*')

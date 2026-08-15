@@ -3,7 +3,7 @@ import { useSidebarStore } from '@/stores/sidebarStore';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Code, FileText, Image, Hammer,
-  GitBranch, Download, Settings, ChevronLeft, ChevronRight, ArrowLeft
+  GitBranch, Download, Settings, ChevronLeft, ChevronRight, ArrowLeft, Database, Users, Workflow
 } from 'lucide-react';
 
 interface NavItem {
@@ -15,6 +15,9 @@ interface NavItem {
 const projectNav: NavItem[] = [
   { label: 'Overview', path: 'overview', icon: <LayoutDashboard className="h-4 w-4" /> },
   { label: 'Sandbox', path: 'sandbox', icon: <Code className="h-4 w-4" /> },
+  { label: 'CMS', path: 'cms', icon: <Database className="h-4 w-4" /> },
+  { label: 'Members', path: 'members', icon: <Users className="h-4 w-4" /> },
+  { label: 'Workflows', path: 'workflows', icon: <Workflow className="h-4 w-4" /> },
   { label: 'Files', path: 'files', icon: <FileText className="h-4 w-4" /> },
   { label: 'Assets', path: 'assets', icon: <Image className="h-4 w-4" /> },
   { label: 'Builds', path: 'builds', icon: <Hammer className="h-4 w-4" /> },

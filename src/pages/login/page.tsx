@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Zap } from 'lucide-react';
@@ -6,11 +6,13 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setAuthenticated } = useAuthStore();
 
   const handleDemoMode = () => {
     setAuthenticated(true);
-    navigate('/dashboard');
+    const redirect = searchParams.get('redirect');
+    navigate(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
   };
 
   return (

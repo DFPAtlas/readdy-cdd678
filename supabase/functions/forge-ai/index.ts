@@ -41,10 +41,11 @@ type PlanConfig = {
 };
 
 const PLAN_DEFAULTS: Record<string, PlanConfig> = {
-  free: { monthly_request_limit: 30, daily_page_request_limit: 5, monthly_credit_limit: 300, maximum_prompt_characters: 2000, maximum_output_tokens: 2048, allowed_task_classes: ['fast_edit', 'copywriting', 'seo'] },
-  starter: { monthly_request_limit: 300, daily_page_request_limit: 30, monthly_credit_limit: 3000, maximum_prompt_characters: 4000, maximum_output_tokens: 4096, allowed_task_classes: ['fast_edit', 'standard', 'copywriting', 'seo'] },
-  pro: { monthly_request_limit: 1500, daily_page_request_limit: 100, monthly_credit_limit: 15000, maximum_prompt_characters: 8000, maximum_output_tokens: 8192, allowed_task_classes: ['fast_edit', 'standard', 'complex', 'copywriting', 'seo', 'accessibility', 'image_alt', 'planning', 'layout', 'code', 'form', 'data', 'debug', 'review', 'validation'] },
-  agency: { monthly_request_limit: 5000, daily_page_request_limit: 300, monthly_credit_limit: 50000, maximum_prompt_characters: 16000, maximum_output_tokens: 16384, allowed_task_classes: ['fast_edit', 'standard', 'complex', 'copywriting', 'seo', 'accessibility', 'image_alt', 'planning', 'layout', 'code', 'form', 'data', 'debug', 'review', 'validation'] },
+  free: { monthly_request_limit: 30, daily_page_request_limit: 5, monthly_credit_limit: 150, maximum_prompt_characters: 2000, maximum_output_tokens: 2048, allowed_task_classes: ['fast_edit', 'copywriting', 'seo'] },
+  starter: { monthly_request_limit: 300, daily_page_request_limit: 30, monthly_credit_limit: 1000, maximum_prompt_characters: 4000, maximum_output_tokens: 4096, allowed_task_classes: ['fast_edit', 'standard', 'copywriting', 'seo'] },
+  builder: { monthly_request_limit: 700, daily_page_request_limit: 60, monthly_credit_limit: 3000, maximum_prompt_characters: 6000, maximum_output_tokens: 6144, allowed_task_classes: ['fast_edit', 'standard', 'complex', 'copywriting', 'seo', 'accessibility', 'image_alt'] },
+  pro: { monthly_request_limit: 1500, daily_page_request_limit: 100, monthly_credit_limit: 6500, maximum_prompt_characters: 8000, maximum_output_tokens: 8192, allowed_task_classes: ['fast_edit', 'standard', 'complex', 'copywriting', 'seo', 'accessibility', 'image_alt', 'planning', 'layout', 'code', 'form', 'data', 'debug', 'review', 'validation'] },
+  agency: { monthly_request_limit: 5000, daily_page_request_limit: 300, monthly_credit_limit: 16000, maximum_prompt_characters: 16000, maximum_output_tokens: 16384, allowed_task_classes: ['fast_edit', 'standard', 'complex', 'copywriting', 'seo', 'accessibility', 'image_alt', 'planning', 'layout', 'code', 'form', 'data', 'debug', 'review', 'validation'] },
 };
 
 /* Capability required for each task class (drives registry routing). */
@@ -410,13 +411,11 @@ function routeModels(registry: RegistryModel[], capability: string, planCode: st
       return providerCredential(m.provider_key, workspaceKeys) !== null;
     })
     .sort((a, b) => {
-      // Prefer user-selected model when it matches capability.
       if (preferredModel) {
         const aPref = a.model_key === preferredModel ? 1 : 0;
         const bPref = b.model_key === preferredModel ? 1 : 0;
         if (aPref !== bPref) return bPref - aPref;
       }
-      // Local-only should rank local data handling higher.
       if (localOnly) {
         const aLocal = a.data_handling === 'local' ? 1 : 0;
         const bLocal = b.data_handling === 'local' ? 1 : 0;
@@ -623,6 +622,7 @@ serve(async (req) => {
   const requestedScope = typeof body.scope === 'string' ? body.scope : 'page';
   const preferredModel = typeof body.preferredModel === 'string' ? body.preferredModel : '';
   const localOnly = body.localOnly === true;
+  const priority = body.priority === true;
 
   if (!projectId || !prompt.trim()) return errorResponse(requestId, 'INVALID_REQUEST', 'projectId and prompt are required', 400);
 
@@ -681,6 +681,20 @@ serve(async (req) => {
     return errorResponse(requestId, 'PLAN_TASK_FORBIDDEN', `Task class "${taskClass}" is not available on your ${planCode} plan`, 403, true);
   }
 
+  // ── Advanced SEO / priority AI gates (boolean entitlements) ──
+  if (taskClass === 'seo' || taskClass === 'site_audit') {
+    const { data: seoCheck } = await userClient.rpc('check_advanced_seo_access', { p_user_id: userId });
+    if (!seoCheck || seoCheck.allowed === false) {
+      return json({ requestId, code: 'ERROR', errorCode: 'FEATURE_NOT_INCLUDED', message: 'Advanced SEO is not included on your plan. Upgrade to unlock SEO and site audits.', entitlement: { plan: seoCheck?.plan, nextPlan: seoCheck?.next_plan }, localFallbackAvailable: true }, 403, cors);
+    }
+  }
+  if (priority) {
+    const { data: prioCheck } = await userClient.rpc('check_priority_ai_access', { p_user_id: userId });
+    if (!prioCheck || prioCheck.allowed === false) {
+      return json({ requestId, code: 'ERROR', errorCode: 'FEATURE_NOT_INCLUDED', message: 'Priority AI is not included on your plan. Upgrade for faster AI processing.', entitlement: { plan: prioCheck?.plan, nextPlan: prioCheck?.next_plan }, localFallbackAvailable: true }, 403, cors);
+    }
+  }
+
   // Credit reservation.
   const reservationKey = clientRequestId || requestId;
   const estimatedCredits = AI_CREDIT_COSTS[taskClass] ?? AI_CREDIT_COSTS.fast_edit;
@@ -692,7 +706,7 @@ serve(async (req) => {
     return errorResponse(requestId, 'CREDIT_RESERVATION_FAILED', 'Unable to reserve AI credits', 500, true);
   }
   if (reservation.error_code === 'INSUFFICIENT_CREDITS') {
-    return json({ requestId, code: 'ERROR', errorCode: 'INSUFFICIENT_CREDITS', message: 'Not enough AI credits for this request', limit: { type: 'credits', used: reservation.used, maximum: reservation.limit, upgradeEligible: true }, localFallbackAvailable: true }, 429, cors);
+    return json({ requestId, code: 'ERROR', errorCode: 'AI_CREDITS_EXHAUSTED', message: 'Not enough AI credits for this request', limit: { type: 'credits', used: reservation.used, maximum: reservation.limit, resetDate: null, upgradeEligible: true, nextPlan: reservation.plan === 'free' ? 'starter' : undefined }, localFallbackAvailable: true }, 429, cors);
   }
   if (reservation.ok !== true) {
     return errorResponse(requestId, 'NO_ENTITLEMENT', 'No active AI entitlement', 403, true);
@@ -717,7 +731,6 @@ serve(async (req) => {
     providerMode = 'local';
     errorCode = 'NO_PROVIDER';
   } else {
-    // Run specialist agents against the selected model chain (with circuit-breaker fallback).
     const agents = agentsForTask(taskClass);
     let modelIdx = 0;
     let finalProposal: ProviderResult['proposal'] | null = null;
@@ -726,7 +739,6 @@ serve(async (req) => {
     for (let a = 0; a < Math.min(agents.length, MAX_AGENT_CALLS); a++) {
       const agent = agents[a];
       let agentResult: ProviderResult | null = null;
-      // Try candidate models in fallback order for this agent call.
       for (let m = modelIdx; m < candidates.length; m++) {
         const candidate = candidates[m];
         try {
@@ -743,7 +755,6 @@ serve(async (req) => {
             providerMode = 'fallback';
             errorCode = 'PROVIDER_UNAVAILABLE';
           }
-          // else: try next candidate (circuit-breaker / fallback)
         }
       }
 
@@ -801,7 +812,6 @@ serve(async (req) => {
     estimated_cost_micros: cost, duration_ms: durationMs, error_code: errorCode,
   }).eq('request_id', reservationKey);
 
-  // Record job, agent runs and change set (audit trail).
   const jobStatus = providerMode === 'live' ? 'completed' : 'failed';
   const { data: jobRow } = await admin.from('ai_jobs').insert({
     user_id: userId, workspace_id: workspaceId, project_id: projectId,

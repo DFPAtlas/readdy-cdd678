@@ -161,6 +161,9 @@ serve(async (req) => {
 
   const action = typeof body.action === 'string' ? body.action : 'deploy';
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
 
   // ── Status probe: reveal provider config (boolean only, no secrets) ──
   if (action === 'status') {
@@ -207,6 +210,29 @@ serve(async (req) => {
       .maybeSingle();
     if (existing) {
       return json({ requestId, code: 'OK', idempotent: true, deployment: existing }, 200, cors);
+    }
+
+    // ── Entitlement gate: production publishing (Free stays preview-only) ──
+    if (environment === 'production') {
+      const { data: pubCheck, error: pubCheckError } = await userClient.rpc('check_published_sites_limit', {
+        p_user_id: userId,
+        p_extra_sites: 1,
+      });
+      if (pubCheckError || !pubCheck) {
+        return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify your publishing limit', 500);
+      }
+      if (pubCheck.allowed === false) {
+        const limited = pubCheck.error_code === 'PLAN_LIMIT_REACHED';
+        return json({
+          requestId,
+          code: 'ERROR',
+          errorCode: limited ? 'PLAN_LIMIT_REACHED' : 'PUBLISHING_NOT_INCLUDED',
+          message: limited
+            ? 'You have reached your published site limit. Upgrade to publish more sites.'
+            : 'Publishing to production is not included on your plan. Upgrade to go live.',
+          usage: { current: pubCheck.current, limit: pubCheck.limit, plan: pubCheck.plan, nextPlan: pubCheck.next_plan },
+        }, 403, cors);
+      }
     }
 
     const sourceVersionId = typeof body.sourceVersionId === 'string' ? body.sourceVersionId : '';

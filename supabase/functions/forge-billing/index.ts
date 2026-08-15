@@ -76,11 +76,26 @@ async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): 
   return (data?.role) === 'forge_admin';
 }
 
+type EffectivePlan = {
+  plan_key: string;
+  access_level: string;
+  paid_access: boolean;
+  subscription_status: string | null;
+  period_end: string | null;
+  reset_date: string | null;
+  next_plan: string;
+};
+
+async function effectivePlan(admin: ReturnType<typeof createClient>, userId: string): Promise<EffectivePlan> {
+  const { data } = await admin.rpc('resolve_effective_plan', { p_user_id: userId });
+  if (!data) {
+    return { plan_key: 'free', access_level: 'free', paid_access: false, subscription_status: null, period_end: null, reset_date: null, next_plan: 'starter' };
+  }
+  return data as EffectivePlan;
+}
+
 async function currentPlan(admin: ReturnType<typeof createClient>, userId: string): Promise<string> {
-  const { data } = await admin.from('subscriptions').select('plan_key, status, current_period_start, current_period_end')
-    .eq('user_id', userId).in('status', ['active', 'trialing', 'past_due'])
-    .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  return (data?.plan_key) ?? 'free';
+  return (await effectivePlan(admin, userId)).plan_key;
 }
 
 async function readEntitlements(admin: ReturnType<typeof createClient>, planKey: string) {
@@ -164,9 +179,58 @@ serve(async (req) => {
     return json({ requestId, code: 'OK', result: data }, 200, cors);
   }
 
+  if (action === 'check_published_sites_limit') {
+    const extra = Number(body.extra) || 1;
+    const { data, error: rpcError } = await userClient.rpc('check_published_sites_limit', { p_user_id: userId, p_extra_sites: extra });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify publishing limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_custom_domains_limit') {
+    const projectId = typeof body.projectId === 'string' ? body.projectId : null;
+    const extra = Number(body.extra) || 1;
+    const { data, error: rpcError } = await userClient.rpc('check_custom_domains_limit', { p_user_id: userId, p_project_id: projectId, p_extra_domains: extra });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify custom domain limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_team_members_limit') {
+    const projectId = typeof body.projectId === 'string' ? body.projectId : null;
+    const extra = Number(body.extra) || 1;
+    const { data, error: rpcError } = await userClient.rpc('check_team_members_limit', { p_user_id: userId, p_project_id: projectId, p_extra_members: extra });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify team member limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_export_access') {
+    const { data, error: rpcError } = await userClient.rpc('check_export_access', { p_user_id: userId });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify export access', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_advanced_seo_access') {
+    const { data, error: rpcError } = await userClient.rpc('check_advanced_seo_access', { p_user_id: userId });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify advanced SEO access', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_priority_ai_access') {
+    const { data, error: rpcError } = await userClient.rpc('check_priority_ai_access', { p_user_id: userId });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify priority AI access', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_asset_storage_limit') {
+    const extraBytes = Number(body.extraBytes) || 0;
+    const { data, error: rpcError } = await userClient.rpc('check_asset_storage_limit', { p_user_id: userId, p_extra_bytes: extraBytes });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify asset storage limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
   /* ── Usage summary (real data only) ── */
   if (action === 'summary') {
-    const planKey = await currentPlan(admin, userId);
+    const ep = await effectivePlan(admin, userId);
+    const planKey = ep.plan_key;
     const entitlements = await readEntitlements(admin, planKey);
 
     const { data: sub } = await admin.from('subscriptions').select('status, current_period_start, current_period_end')
@@ -205,13 +269,13 @@ serve(async (req) => {
       teamMembers = new Set((members ?? []).map((m: { user_id: string }) => m.user_id)).size;
     } catch { teamMembers = 0; }
 
-    // Published production sites.
+    // Published production sites (distinct active projects).
     let publishedSites = 0;
     try {
       const { data: deploys } = projectIds.length
-        ? await admin.from('deployments').select('id').in('project_id', projectIds).eq('environment', 'production').in('status', ['active', 'completed'])
+        ? await admin.from('deployments').select('project_id').in('project_id', projectIds).eq('environment', 'production').in('status', ['active', 'completed'])
         : { data: [] };
-      publishedSites = (deploys ?? []).length;
+      publishedSites = new Set((deploys ?? []).map((d: { project_id: string }) => d.project_id)).size;
     } catch { publishedSites = 0; }
 
     // Custom domains.
@@ -238,9 +302,13 @@ serve(async (req) => {
       requestId, code: 'OK',
       summary: {
         planKey,
-        subscriptionStatus: (sub?.status as string) ?? null,
+        accessLevel: ep.access_level,
+        paidAccess: ep.paid_access,
+        subscriptionStatus: ep.subscription_status ?? (sub?.status as string) ?? null,
         billingInterval: 'month',
-        renewalDate: (sub?.current_period_end as string) ?? null,
+        renewalDate: ep.period_end ?? (sub?.current_period_end as string) ?? null,
+        resetDate: ep.reset_date,
+        nextPlan: ep.next_plan,
         pricingConfigured: Boolean(Deno.env.get('STRIPE_RESTRICTED_KEY')),
         isAdmin: adminFlag,
         meters,
@@ -276,8 +344,6 @@ serve(async (req) => {
     const credits = Number(body.credits) || 0;
     const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : '';
     if (!targetUserId || credits <= 0) return error(requestId, 'INVALID_INPUT', 'Valid user and positive credits required', 400);
-    // Promotional credits recorded as a negative settlement (grant) with a
-    // distinct usage_type so they are auditable and never mistaken for spend.
     await admin.from('usage_ledger').insert({
       user_id: targetUserId, usage_type: 'ai_credit_grant', quantity: credits, status: 'settled',
       idempotency_key: `grant-${crypto.randomUUID()}`, safe_metadata: { reason, granted_by: userId }, settled_at: new Date().toISOString(),
