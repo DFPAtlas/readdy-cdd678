@@ -49,6 +49,7 @@ const routes: RouteObject[] = [
       { path: "/login", element: <LoginPage /> },
       { path: "/setup", element: <SetupPage /> },
       { path: "/onboarding", element: <OnboardingPage /> },
+      { path: "/help", element: <HelpPage /> },
     ],
   },
 
@@ -62,8 +63,6 @@ const routes: RouteObject[] = [
       { path: "/templates", element: <TemplatesPage /> },
       { path: "/agents", element: <AgentsPage /> },
       { path: "/activity", element: <ActivityPage /> },
-      { path: "/help", element: <HelpPage /> },
-
       // Settings with nested routes
       {
         path: "/settings",
