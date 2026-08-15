@@ -69,7 +69,7 @@ export default function HelpPage() {
       <header className="forge-help-header">
         <button type="button" className="forge-help-logo-button" onClick={() => navigate('/')}><ForgeWordmark /></button>
         <nav aria-label="Help centre navigation">
-          <button type="button" onClick={() => navigate('/dashboard')}>Workspace</button><button type="button" onClick={() => navigate('/projects')}>Projects</button><button type="button" onClick={() => navigate('/templates')}>Templates</button><button type="button" className="active" onClick={() => scrollTo('journey')}>How it works</button><button type="button" onClick={() => scrollTo('features')}>Pricing</button>
+          <button type="button" onClick={() => navigate('/dashboard')}>Workspace</button><button type="button" onClick={() => navigate('/projects')}>Projects</button><button type="button" onClick={() => navigate('/templates')}>Templates</button><button type="button" className="active" onClick={() => scrollTo('journey')}>How it works</button><button type="button" onClick={() => navigate('/pricing')}>Pricing</button>
         </nav>
         <div className="forge-help-header-actions"><button type="button" onClick={() => scrollTo('features')}>Help</button><button type="button" onClick={() => navigate('/login')}>Sign in</button><button type="button" className="forge-help-primary" onClick={() => navigate('/projects/new')}>Start building</button></div>
       </header>

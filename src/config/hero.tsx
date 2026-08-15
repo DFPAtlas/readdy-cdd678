@@ -28,6 +28,7 @@ export const PUBLIC_NAV_LINKS = [
   { label: 'Product', href: '#architecture' },
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Local AI', href: '#trust' },
+  { label: 'Pricing', href: '/pricing' },
   { label: 'Documentation', href: '/help' },
 ] as const;
 

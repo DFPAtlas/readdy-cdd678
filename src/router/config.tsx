@@ -11,6 +11,7 @@ import HeroPage from "@/pages/hero/page";
 import LoginPage from "@/pages/login/page";
 import SetupPage from "@/pages/setup/page";
 import OnboardingPage from "@/pages/onboarding/page";
+import PricingPage from "@/pages/pricing/page";
 
 // App pages
 import DashboardPage from "@/pages/dashboard/page";
@@ -50,6 +51,8 @@ const routes: RouteObject[] = [
       { path: "/setup", element: <SetupPage /> },
       { path: "/onboarding", element: <OnboardingPage /> },
       { path: "/help", element: <HelpPage /> },
+      { path: "/pricing", element: <PricingPage /> },
+      { path: "/subscriptions", element: <PricingPage /> },
     ],
   },
 

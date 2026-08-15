@@ -11,13 +11,14 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-const PLAN_KEYS = ['free', 'starter', 'pro', 'agency'] as const;
+const PLAN_KEYS = ['free', 'starter', 'builder', 'pro', 'agency'] as const;
 
 const PLAN_META: Record<string, { name: string; description: string; features: string[]; sortOrder: number }> = {
-  free: { name: 'Free', description: 'For trying out Forge.', features: ['1 project', '5 pages per project', '300 AI credits / month', '50 form submissions'], sortOrder: 0 },
-  starter: { name: 'Starter', description: 'For personal sites and side projects.', features: ['3 projects', '20 pages per project', '3,000 AI credits / month', '1 custom domain'], sortOrder: 1 },
-  pro: { name: 'Pro', description: 'For professionals and client work.', features: ['10 projects', '100 pages per project', '15,000 AI credits / month', '5 custom domains'], sortOrder: 2 },
-  agency: { name: 'Agency', description: 'For teams shipping many sites.', features: ['Unlimited projects & pages', '50 team members', '50,000 AI credits / month', 'Priority AI access'], sortOrder: 3 },
+  free: { name: 'Free', description: 'Try Forge before publishing.', features: ['150 trial AI credits', '3 pages per site', 'Preview only'], sortOrder: 0 },
+  starter: { name: 'Starter', description: 'For a first live website.', features: ['1,000 AI credits / month', '10 pages per site', '1 published site'], sortOrder: 1 },
+  builder: { name: 'Builder', description: 'For regular website building.', features: ['3,000 AI credits / month', '30 pages per site', '5 published sites'], sortOrder: 2 },
+  pro: { name: 'Pro', description: 'For professionals and client work.', features: ['6,500 AI credits / month', '100 pages per site', '20 published sites'], sortOrder: 3 },
+  agency: { name: 'Agency', description: 'For teams shipping at scale.', features: ['16,000 AI credits / month', '250 pages per site', '100 published sites'], sortOrder: 4 },
 };
 
 const AI_CREDIT_COSTS: Record<string, number> = {
