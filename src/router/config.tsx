@@ -38,6 +38,7 @@ import BuildsPage from "@/pages/projects/builds/page";
 import VersionsPage from "@/pages/projects/versions/page";
 import ExportsPage from "@/pages/projects/exports/page";
 import ProjectSettingsPage from "@/pages/projects/settings/page";
+import ForgeAdminPage from "@/pages/admin/page";
 
 const routes: RouteObject[] = [
   // --- Public Routes ---
@@ -98,6 +99,9 @@ const routes: RouteObject[] = [
 
   // --- Sandbox Workspace (standalone, not inside ProjectLayout) ---
   { path: "/projects/:projectId/sandbox", element: <SandboxPage /> },
+
+  // --- Platform Admin Console (server-authorised, standalone) ---
+  { path: "/forge-admin", element: <ForgeAdminPage /> },
 
   // --- Catch-all ---
   {

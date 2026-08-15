@@ -1,0 +1,303 @@
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+/* ──────────────────────────────────────────────────────────────
+   Forge Billing — server-controlled plan catalogue, usage summary,
+   credit estimates, limit checks and audited admin mutations.
+   The browser never computes entitlements, prices or usage truth.
+   ────────────────────────────────────────────────────────────── */
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+const PLAN_KEYS = ['free', 'starter', 'pro', 'agency'] as const;
+
+const PLAN_META: Record<string, { name: string; description: string; features: string[]; sortOrder: number }> = {
+  free: { name: 'Free', description: 'For trying out Forge.', features: ['1 project', '5 pages per project', '300 AI credits / month', '50 form submissions'], sortOrder: 0 },
+  starter: { name: 'Starter', description: 'For personal sites and side projects.', features: ['3 projects', '20 pages per project', '3,000 AI credits / month', '1 custom domain'], sortOrder: 1 },
+  pro: { name: 'Pro', description: 'For professionals and client work.', features: ['10 projects', '100 pages per project', '15,000 AI credits / month', '5 custom domains'], sortOrder: 2 },
+  agency: { name: 'Agency', description: 'For teams shipping many sites.', features: ['Unlimited projects & pages', '50 team members', '50,000 AI credits / month', 'Priority AI access'], sortOrder: 3 },
+};
+
+const AI_CREDIT_COSTS: Record<string, number> = {
+  fast_edit: 3,
+  standard: 10,
+  complex: 25,
+  copywriting: 4,
+  seo: 4,
+  accessibility: 3,
+  image_alt: 2,
+  image_generation: 15,
+  site_audit: 30,
+  full_page: 35,
+  code: 12,
+  redesign: 40,
+};
+
+const ENTITLEMENT_KEYS = [
+  'max_active_projects', 'max_pages_per_project', 'max_team_members',
+  'monthly_ai_credits', 'asset_storage_mb', 'monthly_form_submissions',
+  'custom_domains', 'published_sites', 'version_history_retention_days',
+  'collaboration_access', 'export_access', 'advanced_seo_access', 'priority_ai_access',
+];
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin');
+  const allowed = /^https:\/\/[^/]*readdy\.ai$/.test(origin ?? '') || /^https?:\/\/localhost(:\d+)?$/.test(origin ?? '');
+  return {
+    'Access-Control-Allow-Origin': allowed ? (origin ?? '') : '',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...extra } });
+}
+
+function error(requestId: string, errorCode: string, message: string, status = 400) {
+  return json({ requestId, code: 'ERROR', errorCode, message }, status);
+}
+
+async function getUser(authHeader: string | null) {
+  if (!authHeader) return null;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user.id;
+}
+
+async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
+  return (data?.role) === 'forge_admin';
+}
+
+async function currentPlan(admin: ReturnType<typeof createClient>, userId: string): Promise<string> {
+  const { data } = await admin.from('subscriptions').select('plan_key, status, current_period_start, current_period_end')
+    .eq('user_id', userId).in('status', ['active', 'trialing', 'past_due'])
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return (data?.plan_key) ?? 'free';
+}
+
+async function readEntitlements(admin: ReturnType<typeof createClient>, planKey: string) {
+  const { data } = await admin.from('plan_entitlements').select('entitlement_key, limit_value, configuration')
+    .eq('plan_key', planKey).eq('active', true);
+  const map: Record<string, number | null> = {};
+  (data ?? []).forEach((row: { entitlement_key: string; limit_value: number | null }) => {
+    map[row.entitlement_key] = row.limit_value;
+  });
+  return map;
+}
+
+serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const cors = corsHeaders(req);
+
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  if (req.method !== 'POST') return error(requestId, 'INVALID_REQUEST', 'Method not allowed', 405);
+
+  const userId = await getUser(req.headers.get('authorization'));
+  if (!userId) return error(requestId, 'AUTH_REQUIRED', 'Authentication required', 401);
+
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return error(requestId, 'INVALID_REQUEST', 'Malformed JSON', 400); }
+
+  const action = typeof body.action === 'string' ? body.action : 'summary';
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: req.headers.get('authorization') ?? '' } } });
+
+  /* ── Plan catalogue (with Stripe prices when configured) ── */
+  if (action === 'catalogue') {
+    const pricingConfigured = Boolean(Deno.env.get('STRIPE_RESTRICTED_KEY'));
+    const plans: unknown[] = [];
+    for (const key of PLAN_KEYS) {
+      const meta = PLAN_META[key];
+      const entitlements = await readEntitlements(admin, key);
+      plans.push({ key, name: meta.name, description: meta.description, features: meta.features, sortOrder: meta.sortOrder, price: null, entitlements });
+    }
+    return json({ requestId, code: 'OK', catalogue: { pricingConfigured, plans } }, 200, cors);
+  }
+
+  /* ── Credit cost estimate (server-controlled) ── */
+  if (action === 'estimate') {
+    const taskClass = typeof body.taskClass === 'string' ? body.taskClass : 'fast_edit';
+    const estimatedCredits = AI_CREDIT_COSTS[taskClass] ?? AI_CREDIT_COSTS.fast_edit;
+    const planKey = await currentPlan(admin, userId);
+    const entitlements = await readEntitlements(admin, planKey);
+    const limit = entitlements['monthly_ai_credits'] ?? null;
+
+    const periodStart = await (async () => {
+      const { data } = await admin.from('subscriptions').select('current_period_start')
+        .eq('user_id', userId).in('status', ['active', 'trialing', 'past_due'])
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      return data?.current_period_start ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    })();
+
+    const { data: usedRows } = await admin.from('usage_ledger').select('quantity')
+      .eq('user_id', userId).eq('usage_type', 'ai_credit').in('status', ['reserved', 'settled'])
+      .gte('created_at', periodStart);
+    const used = (usedRows ?? []).reduce((sum: number, r: { quantity: number }) => sum + (r.quantity || 0), 0);
+    const remaining = limit === null ? null : Math.max(0, limit - used);
+    const sufficient = limit === null ? true : (used + estimatedCredits) <= limit;
+
+    return json({ requestId, code: 'OK', estimate: { taskClass, estimatedCredits, sufficient, remaining, limit } }, 200, cors);
+  }
+
+  /* ── Page / project limit checks (delegate to guarded RPCs) ── */
+  if (action === 'check_page_limit') {
+    const projectId = typeof body.projectId === 'string' ? body.projectId : '';
+    const extraPages = Number(body.extraPages) || 1;
+    if (!projectId) return error(requestId, 'INVALID_REQUEST', 'projectId is required', 400);
+    const { data, error: rpcError } = await userClient.rpc('check_page_limit', { p_user_id: userId, p_project_id: projectId, p_extra_pages: extraPages });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify page limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  if (action === 'check_project_limit') {
+    const extraProjects = Number(body.extraProjects) || 1;
+    const { data, error: rpcError } = await userClient.rpc('check_project_limit', { p_user_id: userId, p_extra_projects: extraProjects });
+    if (rpcError) return error(requestId, 'LIMIT_CHECK_FAILED', 'Could not verify project limit', 500);
+    return json({ requestId, code: 'OK', result: data }, 200, cors);
+  }
+
+  /* ── Usage summary (real data only) ── */
+  if (action === 'summary') {
+    const planKey = await currentPlan(admin, userId);
+    const entitlements = await readEntitlements(admin, planKey);
+
+    const { data: sub } = await admin.from('subscriptions').select('status, current_period_start, current_period_end')
+      .eq('user_id', userId).in('status', ['active', 'trialing', 'past_due'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+    // Owned workspaces + projects.
+    const { data: workspaces } = await admin.from('workspaces').select('id').eq('owner_id', userId);
+    const workspaceIds = (workspaces ?? []).map((w: { id: string }) => w.id);
+    const { data: projects } = workspaceIds.length
+      ? await admin.from('projects').select('id, blueprint, status').in('workspace_id', workspaceIds)
+      : { data: [] };
+    const projectIds = (projects ?? []).map((p: { id: string }) => p.id);
+    const activeProjects = (projects ?? []).filter((p: { status?: string }) => (p.status ?? 'draft') !== 'archived').length;
+
+    // Pages: maximum page count across the user's projects (limit is per project).
+    let maxPages = 0;
+    (projects ?? []).forEach((p: { blueprint?: { pages?: unknown[] } }) => {
+      const count = Array.isArray(p.blueprint?.pages) ? p.blueprint.pages.length : 0;
+      if (count > maxPages) maxPages = count;
+    });
+
+    // AI credits used this period.
+    const periodStart = sub?.current_period_start ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { data: creditRows } = await admin.from('usage_ledger').select('quantity')
+      .eq('user_id', userId).eq('usage_type', 'ai_credit').in('status', ['reserved', 'settled'])
+      .gte('created_at', periodStart);
+    const aiCreditsUsed = (creditRows ?? []).reduce((sum: number, r: { quantity: number }) => sum + (r.quantity || 0), 0);
+
+    // Team members across the user's projects.
+    let teamMembers = 0;
+    try {
+      const { data: members } = projectIds.length
+        ? await admin.from('project_members').select('user_id').in('project_id', projectIds).eq('status', 'active')
+        : { data: [] };
+      teamMembers = new Set((members ?? []).map((m: { user_id: string }) => m.user_id)).size;
+    } catch { teamMembers = 0; }
+
+    // Published production sites.
+    let publishedSites = 0;
+    try {
+      const { data: deploys } = projectIds.length
+        ? await admin.from('deployments').select('id').in('project_id', projectIds).eq('environment', 'production').in('status', ['active', 'completed'])
+        : { data: [] };
+      publishedSites = (deploys ?? []).length;
+    } catch { publishedSites = 0; }
+
+    // Custom domains.
+    let customDomains = 0;
+    try {
+      const { data: domains } = projectIds.length
+        ? await admin.from('domains').select('id').in('project_id', projectIds)
+        : { data: [] };
+      customDomains = (domains ?? []).length;
+    } catch { customDomains = 0; }
+
+    const meters = [
+      { key: 'ai_credits', label: 'AI credits', unit: 'credits', used: aiCreditsUsed, limit: entitlements['monthly_ai_credits'] ?? null },
+      { key: 'projects', label: 'Projects', unit: 'projects', used: activeProjects, limit: entitlements['max_active_projects'] ?? null },
+      { key: 'pages', label: 'Pages (largest project)', unit: 'pages', used: maxPages, limit: entitlements['max_pages_per_project'] ?? null },
+      { key: 'team_members', label: 'Team members', unit: 'seats', used: teamMembers, limit: entitlements['max_team_members'] ?? null },
+      { key: 'published_sites', label: 'Published websites', unit: 'sites', used: publishedSites, limit: entitlements['published_sites'] ?? null },
+      { key: 'custom_domains', label: 'Custom domains', unit: 'domains', used: customDomains, limit: entitlements['custom_domains'] ?? null },
+    ];
+
+    const adminFlag = await isAdmin(admin, userId);
+
+    return json({
+      requestId, code: 'OK',
+      summary: {
+        planKey,
+        subscriptionStatus: (sub?.status as string) ?? null,
+        billingInterval: 'month',
+        renewalDate: (sub?.current_period_end as string) ?? null,
+        pricingConfigured: Boolean(Deno.env.get('STRIPE_RESTRICTED_KEY')),
+        isAdmin: adminFlag,
+        meters,
+      },
+    }, 200, cors);
+  }
+
+  /* ── Admin mutations (server-authorised + audited) ── */
+  const adminFlag = await isAdmin(admin, userId);
+  if (!adminFlag) return error(requestId, 'FORBIDDEN', 'Admin access required', 403);
+
+  if (action === 'admin_update_entitlement') {
+    const planKey = typeof body.planKey === 'string' ? body.planKey : '';
+    const entitlementKey = typeof body.entitlementKey === 'string' ? body.entitlementKey : '';
+    const limitValue = body.limitValue === null ? null : Number(body.limitValue);
+    const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : '';
+    if (!PLAN_KEYS.includes(planKey as typeof PLAN_KEYS[number]) || !ENTITLEMENT_KEYS.includes(entitlementKey)) {
+      return error(requestId, 'INVALID_INPUT', 'Unknown plan or entitlement key', 400);
+    }
+    await admin.from('plan_entitlements').upsert({
+      plan_key: planKey, entitlement_key: entitlementKey, limit_value: limitValue, active: true, updated_at: new Date().toISOString(),
+    }, { onConflict: 'plan_key,entitlement_key' });
+    await admin.from('collaboration_events').insert({
+      project_id: null, actor_id: userId, event_type: 'billing.entitlement_updated',
+      entity_type: 'plan_entitlement', entity_id: `${planKey}:${entitlementKey}`,
+      safe_metadata: { plan_key: planKey, entitlement_key: entitlementKey, limit_value: limitValue, reason },
+    });
+    return json({ requestId, code: 'OK', message: 'Entitlement updated.' }, 200, cors);
+  }
+
+  if (action === 'admin_grant_credits') {
+    const targetUserId = typeof body.userId === 'string' ? body.userId : '';
+    const credits = Number(body.credits) || 0;
+    const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : '';
+    if (!targetUserId || credits <= 0) return error(requestId, 'INVALID_INPUT', 'Valid user and positive credits required', 400);
+    // Promotional credits recorded as a negative settlement (grant) with a
+    // distinct usage_type so they are auditable and never mistaken for spend.
+    await admin.from('usage_ledger').insert({
+      user_id: targetUserId, usage_type: 'ai_credit_grant', quantity: credits, status: 'settled',
+      idempotency_key: `grant-${crypto.randomUUID()}`, safe_metadata: { reason, granted_by: userId }, settled_at: new Date().toISOString(),
+    });
+    await admin.from('collaboration_events').insert({
+      project_id: null, actor_id: userId, event_type: 'billing.credits_granted',
+      entity_type: 'usage_ledger', entity_id: targetUserId,
+      safe_metadata: { credits, reason, target_user_id: targetUserId },
+    });
+    return json({ requestId, code: 'OK', message: 'Credits granted.' }, 200, cors);
+  }
+
+  if (action === 'admin_billing_events') {
+    const { data } = await admin.from('billing_events').select('*').order('received_at', { ascending: false }).limit(100);
+    return json({ requestId, code: 'OK', events: data ?? [] }, 200, cors);
+  }
+
+  if (action === 'admin_usage') {
+    const { data } = await admin.from('usage_ledger').select('*').order('created_at', { ascending: false }).limit(200);
+    return json({ requestId, code: 'OK', ledger: data ?? [] }, 200, cors);
+  }
+
+  return error(requestId, 'INVALID_ACTION', `Unknown action "${action}"`, 400);
+});
