@@ -14,7 +14,7 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const STRIPE_RESTRICTED_KEY = Deno.env.get('STRIPE_RESTRICTED_KEY') ?? '';
 
-const PLAN_KEYS = ['free', 'starter', 'pro', 'agency'] as const;
+const PLAN_KEYS = ['free', 'starter', 'builder', 'pro', 'agency'] as const;
 
 let stripe: Stripe | null = null;
 if (STRIPE_RESTRICTED_KEY) {
@@ -64,8 +64,9 @@ async function getOrCreateCustomer(admin: ReturnType<typeof createClient>, userI
   return customer.id;
 }
 
-async function resolvePriceId(planKey: string): Promise<string | null> {
-  const prices = await stripe!.prices.list({ lookup_keys: [planKey], active: true, limit: 1 });
+async function resolvePriceId(planKey: string, billingInterval: 'month' | 'year'): Promise<string | null> {
+  const lookupKey = billingInterval === 'year' ? `${planKey}-yearly` : planKey;
+  const prices = await stripe!.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   return prices.data[0]?.id ?? null;
 }
 
@@ -93,8 +94,8 @@ serve(async (req) => {
 
   // Trusted origin for redirects (origin already allow-listed by CORS).
   const origin = req.headers.get('origin') ?? Deno.env.get('FORGE_APP_URL') ?? '';
-  const successUrl = `${origin}/projects/sandbox?billing=success`;
-  const cancelUrl = `${origin}/projects/sandbox?billing=cancelled`;
+  const successUrl = `${origin}/pricing?billing=success`;
+  const cancelUrl = `${origin}/pricing?billing=cancelled`;
 
   const action = typeof body.action === 'string' ? body.action : 'checkout';
 
@@ -103,15 +104,29 @@ serve(async (req) => {
     const customerId = await getOrCreateCustomer(admin, userId, email);
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${origin}/projects/sandbox?billing=portal-return`,
+      return_url: `${origin}/pricing?billing=portal-return`,
     });
     return json({ requestId, code: 'OK', url: session.url }, 200, cors);
   }
 
   /* ── Checkout ── */
   const planKey = typeof body.planKey === 'string' ? body.planKey : '';
+  const billingInterval = body.billingInterval === 'year' ? 'year' : 'month';
   if (!PLAN_KEYS.includes(planKey as typeof PLAN_KEYS[number]) || planKey === 'free') {
     return error(requestId, 'INVALID_PLAN', 'Unknown or non-billable plan', 400);
+  }
+
+  // Builder is a new tier. Refuse checkout until its server-side limits are
+  // present, otherwise a paid subscription could accidentally be unlimited.
+  if (planKey === 'builder') {
+    const { count, error: entitlementError } = await admin
+      .from('plan_entitlements')
+      .select('entitlement_key', { count: 'exact', head: true })
+      .eq('plan_key', 'builder')
+      .eq('active', true);
+    if (entitlementError || !count) {
+      return error(requestId, 'PLAN_NOT_CONFIGURED', 'Builder plan limits must be configured before checkout is enabled.', 503);
+    }
   }
 
   // Prevent duplicate active subscriptions.
@@ -121,7 +136,7 @@ serve(async (req) => {
     return error(requestId, 'ACTIVE_SUBSCRIPTION', 'You already have an active subscription. Use Manage billing to change plans.', 409);
   }
 
-  const priceId = await resolvePriceId(planKey);
+  const priceId = await resolvePriceId(planKey, billingInterval);
   if (!priceId) {
     return error(requestId, 'PRICE_NOT_CONFIGURED', `No active Stripe price is mapped to the "${planKey}" plan.`, 503);
   }
@@ -134,9 +149,9 @@ serve(async (req) => {
     success_url: successUrl,
     cancel_url: cancelUrl,
     client_reference_id: userId,
-    metadata: { forge_user_id: userId, plan_key: planKey, integration_identifier: 'forge' },
-    subscription_data: { metadata: { forge_user_id: userId, plan_key: planKey } },
-  }, { idempotencyKey: `forge-checkout-${userId}-${planKey}` });
+    metadata: { forge_user_id: userId, plan_key: planKey, billing_interval: billingInterval, integration_identifier: 'forge' },
+    subscription_data: { metadata: { forge_user_id: userId, plan_key: planKey, billing_interval: billingInterval } },
+  }, { idempotencyKey: `forge-checkout-${userId}-${planKey}-${billingInterval}` });
 
   return json({ requestId, code: 'OK', url: session.url }, 200, cors);
 });
