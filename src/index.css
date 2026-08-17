@@ -257,6 +257,28 @@ body {
   animation: scrollLineDown 2.4s ease-in-out infinite;
 }
 
+/* AI agent system — subtle amber pulse travelling a connector line */
+@keyframes forgePulseTravel {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 4px);
+    opacity: 0;
+  }
+}
+
+.animate-forge-pulse-travel {
+  animation: forgePulseTravel 2.8s ease-in-out infinite;
+}
+
 /* Hide native video controls completely */
 video::-webkit-media-controls,
 video::-webkit-media-controls-panel,

@@ -1,135 +1,474 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  ArrowRight, Bot, Check, ChevronRight, Code2, Columns3, ExternalLink,
-  Grip, Menu, MessageSquare, Monitor, MousePointer2, PanelLeft, Play,
-  Rocket, ShieldCheck, Sparkles, Tablet, X,
+  Search, X, ArrowRight, Menu, LifeBuoy, BookOpen, ChevronRight,
 } from 'lucide-react';
-import './help-page.css';
+import {
+  HELP_CATEGORIES,
+  getArticleBySlug,
+  getArticlesByCategory,
+  getCategoryById,
+  searchArticles,
+  type SearchResult,
+} from './helpData';
+import { ArticleBody } from './components/ArticleBody';
+import { HelpSidebar } from './components/HelpSidebar';
+import { CategoryIcon } from './components/CategoryIcon';
+import { ForgeLogoFallback } from '@/config/hero';
+import { useAuthStore } from '@/stores/authStore';
 
-const journeySteps = ['Describe', 'Plan', 'Build', 'Edit', 'Test', 'Publish'];
+/* ── Starter articles shown in the "Start here" section ── */
+const START_HERE_SLUGS = [
+  'what-is-forge',
+  'create-first-project',
+  'configure-ai-provider',
+  'open-the-sandbox',
+  'understand-builds',
+  'export-project',
+];
 
-function ForgeWordmark() {
-  return <span className="forge-help-wordmark" aria-label="Forge"><span aria-hidden="true" /><b>Forge</b></span>;
+function HeaderBar() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return (
+    <header className="sticky top-0 z-40 border-b border-forge-border-subtle bg-forge-bg/95 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-6">
+        <Link to="/" aria-label="Forge home" className="flex shrink-0 items-center gap-2">
+          <ForgeLogoFallback size="sm" />
+        </Link>
+
+        <nav className="hidden items-center gap-1 md:flex" aria-label="Help navigation">
+          <Link
+            to="/dashboard"
+            className="rounded-md px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+          >
+            Workspace
+          </Link>
+          <Link
+            to="/projects"
+            className="rounded-md px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+          >
+            Projects
+          </Link>
+          <Link
+            to="/templates"
+            className="rounded-md px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+          >
+            Templates
+          </Link>
+          <Link
+            to="/pricing"
+            className="rounded-md px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+          >
+            Pricing
+          </Link>
+          <Link
+            to="/help"
+            aria-current="page"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-forge-amber"
+          >
+            Documentation
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <Link
+            to={isAuthenticated ? '/dashboard' : '/login'}
+            className="hidden rounded-md px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary sm:inline-flex"
+          >
+            {isAuthenticated ? 'Open workspace' : 'Sign in'}
+          </Link>
+          <Link
+            to="/projects/new"
+            className="inline-flex items-center rounded-md bg-forge-amber px-3 py-1.5 text-sm font-semibold text-forge-text-inverse whitespace-nowrap transition-colors hover:bg-forge-amber-dim"
+          >
+            Start building
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
 }
 
-function WorkspacePreview({ compact = false }: { compact?: boolean }) {
+/* ── Search box ── */
+
+function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className={`forge-workspace-preview${compact ? ' is-compact' : ''}`} aria-label="Forge workspace preview">
-      <div className="forge-preview-topbar">
-        <ForgeWordmark /><Menu size={13} />
-        <div className="forge-preview-devices"><Monitor size={13} /><Tablet size={12} /><span>1280 px</span></div>
-        <button type="button">Preview</button><button type="button" className="is-publish"><Play size={9} /> Publish</button>
-      </div>
-      <div className="forge-preview-body">
-        <aside className="forge-elements-rail">
-          <strong>Elements</strong>
-          {['Section', 'Heading', 'Text', 'Image', 'Button', 'Container', 'Grid', 'Divider', 'Spacer'].map((item) => <span key={item}><Grip size={10} />{item}</span>)}
-        </aside>
-        <div className="forge-preview-canvas">
-          <div className="forge-canvas-label">Sandbox</div>
-          <div className="forge-demo-site">
-            <div className="forge-demo-nav"><b>Devon <em>Smith</em></b><span>Home　 About　 Projects　 Contact</span></div>
-            <div className="forge-demo-grid">
-              <div><small>SOFTWARE DEVELOPER</small><h3>Building digital<br />experiences that<br />make an <em>impact.</em></h3><p>I design and build modern web applications with an exceptional user experience.</p><button type="button">View My Work</button></div>
-              <pre>{`const developer = {\n  name: 'Devon Smith',\n  skills: ['React', 'TypeScript'],\n  passion: 'Building for the web'\n};`}</pre>
-            </div>
-          </div>
-        </div>
-        <aside className="forge-director-rail">
-          <div className="forge-director-status"><b>Forge Director</b><span>● Online</span></div>
-          <p><b>You</b><br />Create a modern portfolio homepage with a dark theme and orange accents.</p>
-          <p><b>Forge Director</b><br />I’ll prepare the plan and assign the right agents.</p>
-          <div className="forge-mini-plan"><b>Plan</b><span>✓ Create hero section</span><span>✓ Add about section</span><span className="active">→ Add projects grid</span><span>4. Add contact section</span></div>
-          <label>Ask anything about your project… <ChevronRight size={12} /></label>
-        </aside>
-      </div>
+    <div className="relative">
+      <span className="pointer-events-none absolute left-4 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-forge-text-muted">
+        <Search className="h-4 w-4" />
+      </span>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search Forge help…"
+        aria-label="Search Forge help"
+        className="h-12 w-full rounded-lg border border-forge-border bg-forge-panel pl-11 pr-10 text-sm text-forge-text-primary placeholder:text-forge-text-muted focus:border-forge-amber focus:outline-none focus:ring-2 focus:ring-forge-amber/30"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => {
+            onChange('');
+            inputRef.current?.focus();
+          }}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-forge-text-muted transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
 
-export default function HelpPage() {
-  const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState(2);
-  const [tourOpen, setTourOpen] = useState(false);
-  const progress = Math.round(((activeStep + 1) / journeySteps.length) * 100);
+/* ── Search results ── */
 
-  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, []);
-  useEffect(() => {
-    if (!tourOpen) return undefined;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setTourOpen(false); };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [tourOpen]);
-
-  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+function SearchResults({ results, onClear }: { results: SearchResult[]; onClear: () => void }) {
+  if (results.length === 0) {
+    return (
+      <div className="mt-6 rounded-lg border border-forge-border-subtle bg-forge-panel p-8 text-center">
+        <p className="text-sm text-forge-text-secondary">No help articles match your search.</p>
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-forge-border px-3 py-1.5 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+        >
+          Clear search
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="forge-help-page">
-      <header className="forge-help-header">
-        <button type="button" className="forge-help-logo-button" onClick={() => navigate('/')}><ForgeWordmark /></button>
-        <nav aria-label="Help centre navigation">
-          <button type="button" onClick={() => navigate('/dashboard')}>Workspace</button><button type="button" onClick={() => navigate('/projects')}>Projects</button><button type="button" onClick={() => navigate('/templates')}>Templates</button><button type="button" className="active" onClick={() => scrollTo('journey')}>How it works</button><button type="button" onClick={() => navigate('/pricing')}>Pricing</button>
-        </nav>
-        <div className="forge-help-header-actions"><button type="button" onClick={() => scrollTo('features')}>Help</button><button type="button" onClick={() => navigate('/login')}>Sign in</button><button type="button" className="forge-help-primary" onClick={() => navigate('/projects/new')}>Start building</button></div>
-      </header>
+    <ul className="mt-6 space-y-2">
+      {results.map(({ article, excerpt }) => {
+        const category = getCategoryById(article.category);
+        return (
+          <li key={article.slug}>
+            <Link
+              to={`/help?topic=${article.slug}`}
+              className="block rounded-lg border border-forge-border-subtle bg-forge-panel p-4 transition-colors hover:border-forge-border"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-forge-text-primary">{article.title}</span>
+                {category && (
+                  <span className="rounded-full bg-forge-border/60 px-2 py-0.5 text-[11px] text-forge-text-muted">
+                    {category.label}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-forge-text-muted">{excerpt}</p>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
-      <main>
-        <section className="forge-help-hero">
-          <div className="forge-help-intro">
-            <p className="forge-help-breadcrumb">Help Centre <span>/</span> Getting Started</p>
-            <h1>How to use Forge</h1><h2>Build your first website with confidence.</h2>
-            <p className="forge-help-lede">Forge combines AI instructions with a visual drag-and-drop workspace, so you stay in control from the first prompt to publish.</p>
-            <div className="forge-help-hero-actions"><button type="button" className="forge-help-primary" onClick={() => scrollTo('journey')}>Start interactive tour</button><button type="button" className="forge-help-secondary" onClick={() => setTourOpen(true)}><Play size={16} fill="currentColor" />Watch the 3-minute tour</button></div>
-          </div>
-          <WorkspacePreview />
-        </section>
+/* ── Category grid ── */
 
-        <section className="forge-help-journey" id="journey">
-          <h2>Your Forge journey</h2>
-          <div className="forge-journey-track" style={{ '--journey-progress': `${progress}%` } as React.CSSProperties}>
-            {journeySteps.map((step, index) => <button type="button" key={step} className={index === activeStep ? 'active' : index < activeStep ? 'complete' : ''} onClick={() => setActiveStep(index)}><span>{index + 1}</span><b>{step}</b></button>)}
-          </div>
-          <div className="forge-journey-cards">
-            <article><MessageSquare /><span>1</span><div><h3>Describe what you need</h3><p>Tell Forge about your business, pages and features.</p></div></article>
-            <article><MousePointer2 /><span>2</span><div><h3>Shape it your way</h3><p>Drag elements, edit content and ask AI for changes.</p></div></article>
-            <article><ShieldCheck /><span>3</span><div><h3>Test and publish</h3><p>Review every device, fix issues and launch with confidence.</p></div></article>
-          </div>
-          <div className="forge-help-progress-row">
-            <article><h3>Quick-start checklist</h3>{['Create a project', 'Choose a template or start blank', 'Build your first page', 'Preview and publish'].map((item) => <p key={item}><Check size={16} />{item}</p>)}</article>
-            <article><h3>Continue where you left off</h3><p>{activeStep + 1} of 6 steps complete</p><div className="forge-progress-bar"><span style={{ width: `${progress}%` }} /></div><button type="button" className="forge-help-primary" onClick={() => setActiveStep((step) => Math.min(step + 1, 5))}>Resume tutorial</button></article>
-          </div>
-        </section>
+function CategoryGrid() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {HELP_CATEGORIES.map((category) => {
+        const firstArticle = getArticlesByCategory(category.id)[0];
+        const target = firstArticle ? `/help?topic=${firstArticle.slug}` : '/help';
+        return (
+          <Link
+            key={category.id}
+            to={target}
+            className="group flex flex-col rounded-lg border border-forge-border-subtle bg-forge-panel p-5 transition-colors hover:border-forge-border"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-forge-border/50 text-forge-amber">
+              <CategoryIcon name={category.icon} className="h-[18px] w-[18px]" />
+            </span>
+            <span className="mt-3 text-sm font-semibold text-forge-text-primary group-hover:text-forge-amber">
+              {category.label}
+            </span>
+            <span className="mt-1 text-[13px] leading-relaxed text-forge-text-muted">
+              {category.description}
+            </span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
 
-        <section className="forge-help-features" id="features">
-          <p className="forge-help-eyebrow">BUILD YOUR WAY</p><h2>Powerful tools. One simple workspace.</h2><p className="forge-help-section-copy">Use AI when you want speed, visual controls when you want precision, or combine both.</p>
-          <div className="forge-feature-grid">
-            <article><Bot /><h3>Forge Director</h3><p>Describe a change in plain English. Forge prepares the build plan, assigns the right agents and shows the work before it begins.</p><button type="button" onClick={() => scrollTo('director')}>Learn more <ArrowRight size={14} /></button></article>
-            <article><MousePointer2 /><h3>Drag-and-drop editor</h3><p>Add, move and resize text, buttons, images, sections and reusable components directly on the canvas.</p><button type="button" onClick={() => scrollTo('testing')}>Learn more <ArrowRight size={14} /></button></article>
-            <article><Sparkles /><h3>Prompt Builder</h3><p>Turn a rough idea into a structured build prompt with pages, features and clear design requirements.</p><button type="button" onClick={() => scrollTo('director')}>Learn more <ArrowRight size={14} /></button></article>
-            <article><Columns3 /><h3>Elements library</h3><p>Choose ready-made sections, forms, navigation, dashboards and components, then customise every detail.</p><button type="button" onClick={() => scrollTo('testing')}>Learn more <ArrowRight size={14} /></button></article>
+/* ── Start here ── */
+
+function StartHere() {
+  const articles = START_HERE_SLUGS.map(getArticleBySlug).filter(
+    (a): a is NonNullable<typeof a> => Boolean(a),
+  );
+  return (
+    <section className="mt-12">
+      <div className="mb-4 flex items-center gap-2">
+        <BookOpen className="h-4 w-4 text-forge-text-muted" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-forge-text-muted">Start here</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {articles.map((article) => (
+          <Link
+            key={article.slug}
+            to={`/help?topic=${article.slug}`}
+            className="group flex items-center justify-between gap-3 rounded-lg border border-forge-border-subtle bg-forge-panel px-4 py-3 transition-colors hover:border-forge-border"
+          >
+            <span className="text-sm text-forge-text-secondary group-hover:text-forge-text-primary">
+              {article.title}
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-forge-text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-forge-amber" />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── Still stuck ── */
+
+function StillStuck() {
+  return (
+    <section className="mt-14 rounded-lg border border-forge-border-subtle bg-forge-panel p-6">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-forge-border/50 text-forge-amber">
+          <LifeBuoy className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-forge-text-primary">Still stuck?</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-forge-text-muted">
+            Review the troubleshooting guidance, or return to the relevant Forge settings or project area.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to="/help?topic=ai-provider-not-configured"
+              className="inline-flex items-center gap-1.5 rounded-md border border-forge-border px-3 py-1.5 text-[13px] text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+            >
+              Troubleshooting <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+            <Link
+              to="/system/status"
+              className="inline-flex items-center gap-1.5 rounded-md border border-forge-border px-3 py-1.5 text-[13px] text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+            >
+              System status
+            </Link>
+            <Link
+              to="/settings/providers"
+              className="inline-flex items-center gap-1.5 rounded-md border border-forge-border px-3 py-1.5 text-[13px] text-forge-text-secondary transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+            >
+              AI Providers
+            </Link>
           </div>
-        </section>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-        <section className="forge-help-deep-dive" id="director">
-          <div className="forge-director-demo">
-            <div className="forge-demo-heading"><ForgeWordmark /><span>Director　● Online</span></div>
-            <div className="forge-demo-message"><b>You</b><p>Create a pricing page with monthly and annual plans.</p></div><div className="forge-demo-message is-forge"><b>Forge Director</b><p>I’ve prepared a build plan with the right agents.</p></div>
-            <div className="forge-build-plan"><b>Build plan</b><span>Planner <em>Ready</em></span><span>UI Builder <em>Ready</em></span><span>Content Writer <em>Ready</em></span><span>QA Engineer <em>Ready</em></span></div>
-            <div className="forge-demo-actions"><button type="button">Edit plan</button><button type="button">Approve &amp; build</button></div>
-          </div>
-          <div><p className="forge-help-eyebrow">AI-ASSISTED BUILDING</p><h2>Ask Forge. Review the plan. Stay in control.</h2><p>Forge shows which agents will work, what they will change and the estimated credit cost before the build begins.</p><ul><li><Check />Approve the plan before building</li><li><Check />See live agent progress</li><li><Check />Review every file change</li><li><Check />Undo or restore a version</li></ul><button type="button" className="forge-help-secondary" onClick={() => navigate('/projects/new')}>Explore Forge Director <ExternalLink size={15} /></button></div>
-        </section>
+/* ── Home view ── */
 
-        <section className="forge-help-testing" id="testing">
-          <div><p className="forge-help-eyebrow">QUALITY AND PUBLISHING</p><h2>Test every change before it goes live.</h2><p>Preview desktop, tablet and mobile layouts, run automated checks and publish only when your project is ready.</p><ul><li><Check />Responsive device previews</li><li><Check />Automated browser testing</li><li><Check />Build logs and issue repair</li><li><Check />Deploy, export or connect GitHub</li></ul></div>
-          <div className="forge-device-demo"><div className="forge-device-tabs"><span className="active"><Monitor />Desktop</span><span><Tablet />Tablet</span><span><PanelLeft />Mobile</span></div><div className="forge-device-screen"><Code2 /><h3>Your website preview</h3><p>Responsive layout · All checks passed</p><button type="button"><Rocket />Ready to publish</button></div></div>
-        </section>
+function HomeView({ query, setQuery }: { query: string; setQuery: (v: string) => void }) {
+  const results = useMemo(() => searchArticles(query), [query]);
+  const searching = query.trim().length > 0;
 
-        <section className="forge-help-cta"><Rocket /><h2>Ready to build something?</h2><p>Start with a template, upload an existing project or describe your idea to Forge.</p><div><button type="button" className="forge-help-primary" onClick={() => navigate('/projects/new')}>Start building</button><button type="button" className="forge-help-secondary" onClick={() => navigate('/templates')}>Browse templates</button></div></section>
+  return (
+    <main className="mx-auto max-w-7xl px-4 pb-20 md:px-6">
+      <div className="max-w-2xl pt-14 md:pt-20">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-forge-amber">
+          Help &amp; Documentation
+        </p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-forge-text-primary md:text-4xl">
+          How can we help?
+        </h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-forge-text-muted">
+          Find setup guidance, product documentation and troubleshooting information for Forge.
+        </p>
+      </div>
+
+      <div className="mt-8 max-w-2xl">
+        <SearchBox value={query} onChange={setQuery} />
+      </div>
+
+      {searching ? (
+        <div className="mt-2">
+          <SearchResults results={results} onClear={() => setQuery('')} />
+        </div>
+      ) : (
+        <>
+          <StartHere />
+          <section className="mt-12">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-forge-text-muted">
+              Browse by topic
+            </h2>
+            <CategoryGrid />
+          </section>
+          <StillStuck />
+        </>
+      )}
+    </main>
+  );
+}
+
+/* ── Article view ── */
+
+function ArticleView({ slug }: { slug: string }) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const article = getArticleBySlug(slug);
+  const category = article ? getCategoryById(article.category) : undefined;
+  const related = useMemo(
+    () => (article ? article.related.map(getArticleBySlug).filter((a): a is NonNullable<typeof a> => Boolean(a)) : []),
+    [article],
+  );
+
+  // Close the mobile drawer when the slug changes
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [slug]);
+
+  if (!article) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 pb-20 md:px-6">
+        <div className="mt-16 max-w-lg">
+          <h1 className="text-2xl font-bold text-forge-text-primary">Article not found</h1>
+          <p className="mt-2 text-sm text-forge-text-muted">
+            We could not find that help article. It may have moved or the link is incorrect.
+          </p>
+          <Link
+            to="/help"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-forge-amber px-3 py-1.5 text-sm font-semibold text-forge-text-inverse transition-colors hover:bg-forge-amber-dim"
+          >
+            Back to help centre
+          </Link>
+        </div>
       </main>
+    );
+  }
 
-      {tourOpen && <div className="forge-tour-backdrop" role="presentation" onMouseDown={() => setTourOpen(false)}><div className="forge-tour-modal" role="dialog" aria-modal="true" aria-labelledby="forge-tour-title" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="forge-tour-close" aria-label="Close tour" onClick={() => setTourOpen(false)}><X /></button><p className="forge-help-eyebrow">3-MINUTE TOUR</p><h2 id="forge-tour-title">Meet your Forge workspace</h2><p>Describe your idea, approve the build plan, shape the result visually and publish when every check passes.</p><WorkspacePreview compact /><button type="button" className="forge-help-primary" onClick={() => { setTourOpen(false); scrollTo('journey'); }}>Start the guided tour</button></div></div>}
+  return (
+    <main className="mx-auto max-w-7xl px-4 pb-20 md:px-6">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="mt-6 flex items-center gap-1.5 text-[13px] text-forge-text-muted">
+        <Link to="/help" className="transition-colors hover:text-forge-text-primary">
+          Help
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span>{category ? category.label : 'Documentation'}</span>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-forge-text-secondary">{article.title}</span>
+      </nav>
+
+      <div className="mt-6 flex flex-col gap-8 lg:flex-row">
+        {/* Mobile topic selector */}
+        <div className="lg:hidden">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-forge-border px-3 py-2 text-sm text-forge-text-secondary transition-colors hover:bg-forge-hover"
+            aria-expanded={drawerOpen}
+            aria-controls="help-mobile-drawer"
+          >
+            <Menu className="h-4 w-4" />
+            Browse topics
+          </button>
+        </div>
+
+        {/* Sidebar (desktop) */}
+        <aside className="hidden w-60 shrink-0 lg:block">
+          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-4">
+            <HelpSidebar activeSlug={slug} />
+          </div>
+        </aside>
+
+        {/* Article */}
+        <article className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight text-forge-text-primary md:text-3xl">
+            {article.title}
+          </h1>
+          {category && (
+            <p className="mt-2 text-[13px] text-forge-text-muted">{category.label}</p>
+          )}
+          <div className="mt-6 border-t border-forge-border-subtle pt-6">
+            <ArticleBody article={article} />
+          </div>
+
+          {related.length > 0 && (
+            <section className="mt-10 border-t border-forge-border-subtle pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-forge-text-muted">
+                Related articles
+              </h2>
+              <ul className="mt-3 space-y-1">
+                {related.map((rel) => (
+                  <li key={rel.slug}>
+                    <Link
+                      to={`/help?topic=${rel.slug}`}
+                      className="inline-flex items-center gap-1.5 text-sm text-forge-text-secondary transition-colors hover:text-forge-amber"
+                    >
+                      {rel.title}
+                      <ArrowRight className="h-3.5 w-3.5 text-forge-text-muted" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <StillStuck />
+        </article>
+      </div>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <div
+            id="help-mobile-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Help topics"
+            className="absolute left-0 top-0 bottom-0 w-[300px] max-w-[85vw] overflow-y-auto border-r border-forge-border-subtle bg-forge-bg p-5"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-sm font-semibold text-forge-text-primary">Browse topics</span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Close topics"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-forge-text-muted transition-colors hover:bg-forge-hover hover:text-forge-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <HelpSidebar activeSlug={slug} />
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+/* ── Page ── */
+
+export default function HelpPage() {
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState('');
+  const topic = searchParams.get('topic');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [topic]);
+
+  return (
+    <div className="min-h-screen bg-forge-bg">
+      <HeaderBar />
+      {topic ? (
+        <ArticleView slug={topic} />
+      ) : (
+        <HomeView query={query} setQuery={setQuery} />
+      )}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function ProjectToolbar() {
         clearInterval(interval);
         setBuildStatus('success');
         setBuildProgress(100);
-        toast.show('Build completed successfully', 'success');
+        toast.show('Preview complete — this build was simulated', 'success');
       } else {
         setBuildProgress(p);
       }
@@ -48,11 +48,11 @@ export function ProjectToolbar() {
       <div className="flex items-center gap-2.5 h-[46px] px-3 rounded-xl border border-forge-border-subtle bg-[linear-gradient(135deg,rgba(18,22,27,0.98),rgba(8,11,15,0.98))] shadow-lg mr-4"
       >
         <div className="flex flex-col">
-          <span className="text-[13px] font-bold text-forge-text-primary leading-tight">Forge.space</span>
-          <span className="text-[10px] text-forge-text-muted">ID: 001 · last edit 2m ago</span>
+          <span className="text-[13px] font-bold text-forge-text-primary leading-tight">Preview Project</span>
+          <span className="text-[10px] text-forge-text-muted">Demo workspace</span>
         </div>
-        <span className="ml-3 text-[11px] text-emerald-400 px-2 py-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 whitespace-nowrap">
-          Healthy
+        <span className="ml-3 text-[11px] text-forge-amber px-2 py-1 rounded-full border border-forge-amber/30 bg-forge-amber/10 whitespace-nowrap">
+          Preview
         </span>
       </div>
 
@@ -170,6 +170,7 @@ export function ProjectToolbar() {
         <button
           onClick={handleBuild}
           disabled={buildStatus === 'running'}
+          title="Workspace preview"
           className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg text-xs font-semibold whitespace-nowrap bg-forge-amber text-[#0B0D10] hover:bg-forge-amber/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_26px_rgba(251,191,36,0.24)] cursor-pointer"
         >
           <Play className="h-3 w-3" />

@@ -1,177 +1,156 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { useMemo, useState } from 'react';
+import { FolderKanban, Hammer, Bot, GitBranch, Package, RefreshCw, Activity } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useActivity } from '@/hooks/useActivity';
+import {
+  filterActivity,
+  defaultActivityFilters,
+  type ActivityFilters,
+} from '@/services/activityService';
 import { Button } from '@/components/ui/Button';
-import { SearchInput } from '@/components/ui/SearchInput';
-import { demoActivityFeed } from '@/services/mock/demoData';
-import type { DemoActivityItem } from '@/services/mock/demoData';
-import { Activity, Clock, Filter, X, Hammer, GitBranch, Download, FolderKanban, Image as ImageIcon, Cpu, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ActivityFilters as FiltersBar } from './components/ActivityFilters';
+import { ActivityTimeline } from './components/ActivityTimeline';
 
-const typeIcons: Record<string, React.ReactNode> = {
-  build: <Hammer className="h-4 w-4 text-amber-500" />,
-  version: <GitBranch className="h-4 w-4 text-sky-500" />,
-  export: <Download className="h-4 w-4 text-violet-500" />,
-  project: <FolderKanban className="h-4 w-4 text-emerald-500" />,
-  asset: <ImageIcon className="h-4 w-4 text-rose-500" />,
-  system: <AlertTriangle className="h-4 w-4 text-foreground-400" />,
-  provider: <Cpu className="h-4 w-4 text-sky-500" />,
-  blueprint: <Activity className="h-4 w-4 text-amber-500" />,
-};
+interface SummaryCardProps {
+  icon: LucideIcon;
+  tint: string;
+  bg: string;
+  label: string;
+  value: number;
+}
+
+function SummaryCard({ icon: Icon, tint, bg, label, value }: SummaryCardProps) {
+  return (
+    <div className="bg-forge-panel border border-forge-border-subtle rounded-lg p-3 flex items-center gap-3">
+      <div className={`h-9 w-9 rounded-md flex items-center justify-center shrink-0 ${bg} ${tint}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-semibold text-forge-text-primary leading-none">{value}</p>
+        <p className="mt-1 text-xs text-forge-text-muted truncate">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="bg-forge-panel border border-forge-border-subtle rounded-lg overflow-hidden">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-start gap-3 px-4 py-3 border-b border-forge-border-subtle last:border-b-0">
+          <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-64" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ActivityPage() {
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [selectedItem, setSelectedItem] = useState<DemoActivityItem | null>(null);
+  const { data, loading, error, lastUpdated, retry } = useActivity();
+  const [filters, setFilters] = useState<ActivityFilters>(defaultActivityFilters);
 
-  const uniqueProjects = [...new Set(demoActivityFeed.filter((a) => a.projectName).map((a) => a.projectName))];
+  const filtered = useMemo(() => filterActivity(data.activity, filters), [data.activity, filters]);
 
-  const filtered = demoActivityFeed.filter((a) => {
-    if (typeFilter !== 'all' && a.type !== typeFilter) return false;
-    if (projectFilter !== 'all' && a.projectName !== projectFilter) return false;
-    if (search && !a.action.toLowerCase().includes(search.toLowerCase()) && !a.user.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const hasActiveFilters =
+    filters.search !== '' ||
+    filters.kind !== 'all' ||
+    filters.projectId !== 'all' ||
+    filters.status !== 'all' ||
+    filters.dateRange !== 'all';
+
+  const patchFilters = (patch: Partial<ActivityFilters>) => setFilters((prev) => ({ ...prev, ...patch }));
+  const clearFilters = () => setFilters(defaultActivityFilters);
+
+  const lastUpdatedLabel = lastUpdated
+    ? lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
 
   return (
     <>
-      <PageHeader
-        title="Activity"
-        description="Workspace-wide activity feed"
-        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity' }]}
-      />
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search activity..." className="w-48" />
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-8 px-2.5 text-xs rounded-lg border border-background-200 bg-white text-foreground-950 focus:outline-none focus:ring-1 focus:ring-amber-500"
-        >
-          <option value="all">All Types</option>
-          <option value="build">Build</option>
-          <option value="version">Version</option>
-          <option value="export">Export</option>
-          <option value="project">Project</option>
-          <option value="asset">Asset</option>
-          <option value="provider">Provider</option>
-          <option value="system">System</option>
-        </select>
-        <select
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          className="h-8 px-2.5 text-xs rounded-lg border border-background-200 bg-white text-foreground-950 focus:outline-none focus:ring-1 focus:ring-amber-500"
-        >
-          <option value="all">All Projects</option>
-          {uniqueProjects.map((p) => (
-            <option key={p!} value={p!}>{p}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Activity list */}
-      <Card className="overflow-hidden">
-        <div className="divide-y divide-background-50">
-          {filtered.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-start gap-3 px-4 py-3 hover:bg-background-50 transition-colors cursor-pointer"
-              onClick={() => setSelectedItem(item)}
+      {/* Header */}
+      <div className="mb-6">
+        <p className="text-xs font-medium uppercase tracking-wider text-forge-amber mb-1">Workspace</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-forge-text-primary">Activity</h1>
+            <p className="mt-1 text-sm text-forge-text-muted">
+              Review recent changes, builds, AI-assisted work and important events across Forge.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {lastUpdatedLabel && (
+              <span className="text-xs text-forge-text-muted whitespace-nowrap">
+                Last updated: {lastUpdatedLabel}
+              </span>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={retry}
+              loading={loading}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
             >
-              <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                item.type === 'build' ? 'bg-amber-500/10' :
-                item.type === 'export' ? 'bg-violet-500/10' :
-                item.type === 'system' ? 'bg-foreground-100' :
-                'bg-background-100'
-              }`}>
-                {typeIcons[item.type]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-sm font-medium text-foreground-950">{item.action}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  {item.projectName && (
-                    <>
-                      <Link
-                        to={item.projectId ? `/projects/${item.projectId}/overview` : '#'}
-                        className="text-amber-500 hover:text-amber-400"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {item.projectName}
-                      </Link>
-                      <span className="text-foreground-300">·</span>
-                    </>
-                  )}
-                  <span className="text-foreground-500">{item.user}</span>
-                  <span className="text-foreground-300">·</span>
-                  <span className="text-foreground-400 flex items-center gap-0.5">
-                    <Clock className="h-2.5 w-2.5" />
-                    {new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  {item.details && (
-                    <>
-                      <span className="text-foreground-300">·</span>
-                      <span className="text-foreground-500 truncate max-w-[200px]">{item.details}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Detail drawer */}
-      {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setSelectedItem(null)}>
-          <div className="bg-white rounded-xl max-w-sm w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-background-100">
-              <h3 className="text-sm font-semibold text-foreground-950">Activity Detail</h3>
-              <button onClick={() => setSelectedItem(null)} className="p-1 rounded-md hover:bg-background-100 transition-colors">
-                <X className="h-4 w-4 text-foreground-500" />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                  selectedItem.type === 'build' ? 'bg-amber-500/10' : 'bg-background-100'
-                }`}>
-                  {typeIcons[selectedItem.type]}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground-950">{selectedItem.action}</p>
-                  <Badge size="sm" variant="default">{selectedItem.type}</Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-background-50 rounded-lg p-2.5">
-                  <p className="text-foreground-500">User</p>
-                  <p className="font-medium text-foreground-950">{selectedItem.user}</p>
-                </div>
-                <div className="bg-background-50 rounded-lg p-2.5">
-                  <p className="text-foreground-500">Time</p>
-                  <p className="font-medium text-foreground-950">{new Date(selectedItem.timestamp).toLocaleString()}</p>
-                </div>
-                {selectedItem.projectName && (
-                  <div className="bg-background-50 rounded-lg p-2.5 col-span-2">
-                    <p className="text-foreground-500">Project</p>
-                    <p className="font-medium text-foreground-950">{selectedItem.projectName}</p>
-                  </div>
-                )}
-                {selectedItem.details && (
-                  <div className="bg-background-50 rounded-lg p-2.5 col-span-2">
-                    <p className="text-foreground-500">Details</p>
-                    <p className="font-medium text-foreground-950">{selectedItem.details}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+              Refresh
+            </Button>
           </div>
         </div>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+        <SummaryCard icon={FolderKanban} tint="text-forge-amber" bg="bg-forge-amber/10" label="Projects" value={data.summary.projects} />
+        <SummaryCard icon={Hammer} tint="text-forge-accent" bg="bg-forge-accent/10" label="Builds" value={data.summary.builds} />
+        <SummaryCard icon={Bot} tint="text-forge-agent" bg="bg-forge-agent/10" label="AI tasks" value={data.summary.ai} />
+        <SummaryCard icon={GitBranch} tint="text-forge-success" bg="bg-forge-success/10" label="Versions" value={data.summary.versions} />
+        <SummaryCard icon={Package} tint="text-forge-warning" bg="bg-forge-warning/10" label="Exports" value={data.summary.exports} />
+      </div>
+
+      {/* Filters */}
+      <div className="mb-4">
+        <FiltersBar
+          filters={filters}
+          projects={data.projects}
+          onChange={patchFilters}
+          onClear={clearFilters}
+          hasActiveFilters={hasActiveFilters}
+        />
+      </div>
+
+      {/* Content */}
+      {error ? (
+        <ErrorState title="Unable to load activity" onRetry={retry} />
+      ) : loading ? (
+        <LoadingSkeleton />
+      ) : data.activity.length === 0 ? (
+        <div className="bg-forge-panel border border-forge-border-subtle rounded-lg">
+          <EmptyState
+            icon={<Activity className="h-8 w-8" />}
+            title="No activity yet"
+            description="Activity will appear here as you create projects, run builds and use Forge features."
+          />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-forge-panel border border-forge-border-subtle rounded-lg">
+          <EmptyState
+            title="No activity matches these filters"
+            description="Try adjusting or clearing your filters to see more events."
+            action={
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            }
+          />
+        </div>
+      ) : (
+        <ActivityTimeline activity={filtered} />
       )}
     </>
   );

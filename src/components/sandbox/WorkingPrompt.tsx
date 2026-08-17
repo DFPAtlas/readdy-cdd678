@@ -17,7 +17,7 @@ export function WorkingPrompt() {
   const tokenEstimate = useMemo(() => Math.round(charCount / 4), [charCount]);
 
   const handleSubmit = useCallback(() => {
-    toast.show('Build prompt submitted', 'success');
+    toast.show('Preview mode — this homepage workspace demonstrates the Forge interface', 'info');
   }, [toast]);
 
   if (!promptPanelOpen) {

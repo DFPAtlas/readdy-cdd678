@@ -73,21 +73,11 @@ export function LeftProjectPanel() {
             {/* Project Info Card */}
             <div className="mx-3 mt-3 p-3 rounded-xl border border-forge-border-subtle bg-[linear-gradient(145deg,rgba(22,27,33,0.98),rgba(9,12,16,0.98))]"
             >
-              <strong className="block text-[13px] font-bold mb-2">Forge.space</strong>
+              <strong className="block text-[13px] font-bold mb-2">Preview Project</strong>
               <div className="flex justify-between gap-2 text-[10px] text-forge-text-muted"
               >
-                <span>Tier: Pro</span>
                 <span>Pages: 5</span>
-              </div>
-              <div className="flex justify-between gap-2 text-[10px] text-forge-text-muted mt-1"
-              >
-                <span>Credits: 1,240</span>
-                <span>Storage: 82%</span>
-              </div>
-              <div className="h-[5px] bg-[#1c2845] rounded-full overflow-hidden mt-2"
-              >
-                <span className="block h-full w-[62%] rounded-full bg-forge-amber"
-                />
+                <span className="text-forge-amber">Demo workspace</span>
               </div>
             </div>
 
@@ -115,10 +105,10 @@ export function LeftProjectPanel() {
             >
               <div className="text-[10px] font-semibold uppercase tracking-wider text-forge-text-muted px-1 mb-1"
               >Quick Actions</div>
-              <QuickAction icon={Plus} label="New Page" onClick={() => toast.show('New Page — coming soon')} />
-              <QuickAction icon={LayoutGrid} label="New Section" onClick={() => toast.show('New Section — coming soon')} />
-              <QuickAction icon={Box} label="New Component" onClick={() => toast.show('New Component — coming soon')} />
-              <QuickAction icon={Download} label="Import Template" onClick={() => toast.show('Import — coming soon')} />
+              <QuickAction icon={Plus} label="New Page" onClick={() => toast.show('New Page — workspace preview')} />
+              <QuickAction icon={LayoutGrid} label="New Section" onClick={() => toast.show('New Section — workspace preview')} />
+              <QuickAction icon={Box} label="New Component" onClick={() => toast.show('New Component — workspace preview')} />
+              <QuickAction icon={Download} label="Import Template" onClick={() => toast.show('Import Template — workspace preview')} />
             </div>
           </>
         )}
@@ -159,14 +149,14 @@ function FeaturesTab() {
       />
 
       <div className="text-[10px] font-extrabold text-[#8D959E] uppercase tracking-[0.11em] mb-2 px-1"
-      >Core Features</div>
+      >Feature Library Preview</div>
 
       {features.map((f) => (
         <button
           key={f.id}
           onClick={() => {
             setSelected(f.id);
-            toast.show(`${f.label} — coming soon`);
+            toast.show(`${f.label} — planned capability`);
           }}
           className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
             selected === f.id
@@ -175,13 +165,16 @@ function FeaturesTab() {
           }`}
         >
           <f.icon className="h-4 w-4 text-forge-text-muted flex-shrink-0" />
-          <span className="truncate">{f.label}</span>
+          <span className="truncate flex-1">{f.label}</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-forge-amber/10 text-forge-amber whitespace-nowrap">
+            Planned
+          </span>
         </button>
       ))}
 
       <p className="text-[12px] text-forge-text-muted leading-[1.45] mt-2 px-1"
       >
-        Select a feature to add it to your project.
+        A preview of Forge's planned feature library.
       </p>
     </div>
   );

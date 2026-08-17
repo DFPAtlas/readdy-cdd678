@@ -1,191 +1,214 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useProjectMembers } from '@/hooks/useProjectMembers';
 import {
-  LayoutDashboard, Users, Shield, ShieldCheck, KeyRound, Mail, ListChecks, Lock, Activity,
-} from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import type { SiteMember, SiteRole, SiteProfileField, SiteAuthEvent, SiteAuthConfig } from './membersTypes';
-import { defaultSiteAuthConfig } from './membersTypes';
-import {
-  listMembers, listRoles, listProfileFields, listAuthEvents,
-  getAuthConfig, saveAuthConfig, currentProjectRole,
-} from './membersData';
-import { OverviewSection } from './components/OverviewSection';
-import { MemberListSection } from './components/MemberListSection';
-import { RolesSection } from './components/RolesSection';
-import { ProfileFieldsSection } from './components/ProfileFieldsSection';
-import { AuthMethodsSection } from './components/AuthMethodsSection';
-import { ActivitySection } from './components/ActivitySection';
-import { MembersPlaceholder } from './components/MembersPlaceholder';
+  canManageMembers,
+  createProjectInvitation,
+  revokeProjectInvitation,
+  updateProjectMemberRole,
+  removeProjectMember,
+  type MemberRole,
+  type ProjectMember,
+} from '@/services/projectMembersService';
+import { ProjectSectionHeader } from '@/pages/projects/components/ProjectSectionHeader';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
+import { LinkButton } from '@/pages/dashboard/components/LinkButton';
+import { MembersOverview } from './components/MembersOverview';
+import { ProjectMembersList } from './components/ProjectMembersList';
+import { PendingInvitesSection } from './components/PendingInvitesSection';
+import { InviteMemberModal } from './components/InviteMemberModal';
+import { RolesExplanation } from './components/RolesExplanation';
+import { MembersActivity } from './components/MembersActivity';
+import { RefreshCw, Lock, AlertTriangle, UserPlus } from 'lucide-react';
 
-type SectionKey = 'overview' | 'members' | 'roles' | 'protected-pages' | 'auth-methods' | 'email-templates' | 'profile-fields' | 'security' | 'activity';
-
-const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-3.5 w-3.5" /> },
-  { key: 'members', label: 'Member list', icon: <Users className="h-3.5 w-3.5" /> },
-  { key: 'roles', label: 'Roles', icon: <Shield className="h-3.5 w-3.5" /> },
-  { key: 'protected-pages', label: 'Protected pages', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
-  { key: 'auth-methods', label: 'Authentication methods', icon: <KeyRound className="h-3.5 w-3.5" /> },
-  { key: 'email-templates', label: 'Email templates', icon: <Mail className="h-3.5 w-3.5" /> },
-  { key: 'profile-fields', label: 'Profile fields', icon: <ListChecks className="h-3.5 w-3.5" /> },
-  { key: 'security', label: 'Security', icon: <Lock className="h-3.5 w-3.5" /> },
-  { key: 'activity', label: 'Activity', icon: <Activity className="h-3.5 w-3.5" /> },
-];
+function MembersSkeleton() {
+  return (
+    <div>
+      <div className="mb-6">
+        <Skeleton className="h-3 w-40 mb-3" />
+        <Skeleton className="h-6 w-48 mb-2" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-5">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-32" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    </div>
+  );
+}
 
 export default function MembersPage() {
   const { projectId } = useParams();
-  const [section, setSection] = useState<SectionKey>('overview');
-  const [members, setMembers] = useState<SiteMember[]>([]);
-  const [roles, setRoles] = useState<SiteRole[]>([]);
-  const [fields, setFields] = useState<SiteProfileField[]>([]);
-  const [events, setEvents] = useState<SiteAuthEvent[]>([]);
-  const [config, setConfig] = useState<SiteAuthConfig>(defaultSiteAuthConfig());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [role, setRole] = useState<string | null>(null);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [eventsError, setEventsError] = useState('');
-  const [savingConfig, setSavingConfig] = useState(false);
+  const { data, loading, error, retry, refresh, refreshing } = useProjectMembers(projectId);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<ProjectMember | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
-  const canManage = role === 'owner' || role === 'admin';
+  if (loading) return <MembersSkeleton />;
 
-  const refresh = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError('');
-    const [m, r, f, cfg, userRole] = await Promise.all([
-      listMembers(projectId),
-      listRoles(projectId),
-      listProfileFields(projectId),
-      getAuthConfig(projectId),
-      currentProjectRole(projectId),
-    ]);
-    setMembers(m);
-    setRoles(r);
-    setFields(f);
-    if (cfg) setConfig(cfg);
-    setRole(userRole);
-    setLoading(false);
-  }, [projectId]);
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load project members"
+        message="Something went wrong while loading this project's collaborators. Please try again."
+        onRetry={retry}
+      />
+    );
+  }
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  if (!data.authenticated) {
+    return (
+      <EmptyState
+        icon={<Lock className="h-8 w-8" />}
+        title="Sign in to view this project"
+        description="You need to be signed in to manage your Forge project members."
+        action={
+          <LinkButton variant="secondary" to="/login">
+            Sign in
+          </LinkButton>
+        }
+      />
+    );
+  }
 
-  const refreshEvents = useCallback(async () => {
-    if (!projectId) return;
-    setEventsLoading(true);
-    setEventsError('');
-    const ev = await listAuthEvents(projectId);
-    setEvents(ev);
-    setEventsLoading(false);
-  }, [projectId]);
+  if (!data.found || !data.project) {
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-8 w-8" />}
+        title="Project not found"
+        description="The project you're looking for doesn't exist or has been removed."
+        action={
+          <LinkButton variant="secondary" to="/projects">
+            Back to Projects
+          </LinkButton>
+        }
+      />
+    );
+  }
 
-  useEffect(() => {
-    if (section === 'activity') void refreshEvents();
-  }, [section, refreshEvents]);
+  const project = data.project;
+  const canManage = canManageMembers(data.currentUserRole);
+  const now = Date.now();
+  const pendingInviteCount = data.invitations.filter(
+    (i) => !i.acceptedAt && !i.revokedAt && (!i.expiresAt || Date.parse(i.expiresAt) >= now),
+  ).length;
 
-  const persistConfig = useCallback(async (next: SiteAuthConfig) => {
-    if (!projectId) return;
-    setSavingConfig(true);
-    const res = await saveAuthConfig(projectId, next);
-    setSavingConfig(false);
-    if (res.ok) setConfig(next);
-  }, [projectId]);
-
-  const updateConfig = useCallback((patch: Partial<SiteAuthConfig>) => {
-    setConfig((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const toggleEnabled = (enabled: boolean) => {
-    const next = { ...config, enabled };
-    setConfig(next);
-    void persistConfig(next);
+  const handleInvite = async (email: string, role: MemberRole) => {
+    const res = await createProjectInvitation(project.id, { email, role });
+    if (res.ok) await refresh();
+    return res;
   };
 
-  const counts = {
-    total: members.length,
-    active: members.filter((m) => m.status === 'active').length,
-    pending: members.filter((m) => m.status === 'pending').length,
-    suspended: members.filter((m) => m.status === 'suspended').length,
+  const handleRevoke = async (id: string) => {
+    const res = await revokeProjectInvitation(id);
+    if (res.ok) await refresh();
+    return res;
+  };
+
+  const handleRoleChange = async (memberId: string, role: MemberRole) => {
+    const res = await updateProjectMemberRole(project.id, memberId, role);
+    if (res.ok) await refresh();
+    return res;
+  };
+
+  const handleRemove = async () => {
+    if (!removeTarget) return;
+    setRemoveBusy(true);
+    const res = await removeProjectMember(project.id, removeTarget.id);
+    setRemoveBusy(false);
+    setRemoveTarget(null);
+    if (res.ok) await refresh();
   };
 
   return (
-    <div>
-      <PageHeader
+    <>
+      <ProjectSectionHeader
+        eyebrow="Collaboration"
         title="Members"
-        description="Secure sign-up, login, member profiles and protected pages for the sites you build — separate from your Forge collaborators."
-        breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
-          { label: 'Members' },
-        ]}
+        description="Manage who can access and work on this Forge project."
+        projectId={project.id}
+        projectName={project.name}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={refresh}
+              loading={refreshing}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+            >
+              Refresh
+            </Button>
+            {canManage && (
+              <Button size="sm" icon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                Invite member
+              </Button>
+            )}
+          </>
+        }
       />
 
-      <nav className="flex flex-wrap items-center gap-1 mb-5 border-b border-forge-border-subtle" role="navigation" aria-label="Members sections">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSection(s.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
-              section === s.key
-                ? 'border-forge-amber text-forge-amber'
-                : 'border-transparent text-forge-text-muted hover:text-forge-text-primary'
-            }`}
-            aria-current={section === s.key ? 'page' : undefined}
-          >
-            {s.icon}
-            {s.label}
-          </button>
-        ))}
-      </nav>
-
-      {section === 'overview' && (
-        <OverviewSection
-          config={config}
-          counts={counts}
-          rolesCount={roles.length}
-          fieldsCount={fields.length}
-          canManage={canManage}
-          saving={savingConfig}
-          onToggleEnabled={toggleEnabled}
+      <div className="mb-5">
+        <MembersOverview
+          memberCount={data.members.length}
+          pendingInviteCount={pendingInviteCount}
+          currentUserRole={data.currentUserRole}
         />
-      )}
+      </div>
 
-      {section === 'members' && (
-        <MemberListSection
-          projectId={projectId ?? ''}
-          members={members}
-          roles={roles}
-          canManage={canManage}
-          loading={loading}
-          error={error}
-          onRefresh={refresh}
-        />
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-5">
+          <ProjectMembersList
+            members={data.members}
+            canManage={canManage}
+            onRoleChange={handleRoleChange}
+            onRemoveRequest={setRemoveTarget}
+          />
 
-      {section === 'roles' && (
-        <RolesSection projectId={projectId ?? ''} roles={roles} canManage={canManage} onRefresh={refresh} />
-      )}
+          <PendingInvitesSection invitations={data.invitations} canManage={canManage} onRevoke={handleRevoke} />
 
-      {section === 'profile-fields' && (
-        <ProfileFieldsSection projectId={projectId ?? ''} fields={fields} canManage={canManage} onRefresh={refresh} />
-      )}
+          <MembersActivity events={data.events} />
+        </div>
 
-      {section === 'auth-methods' && (
-        <AuthMethodsSection
-          config={config}
-          canManage={canManage}
-          saving={savingConfig}
-          onConfigChange={updateConfig}
-          onSave={() => persistConfig(config)}
-        />
-      )}
+        <div className="space-y-5">
+          <RolesExplanation />
+          <div className="rounded-lg border border-forge-border-subtle bg-forge-panel p-4">
+            <p className="text-[11px] text-forge-text-muted leading-relaxed">
+              Membership changes are enforced server-side. Only the owner and admins can invite collaborators, change
+              roles or remove access. Email addresses are shown only to other project members.
+            </p>
+          </div>
+        </div>
+      </div>
 
-      {section === 'activity' && (
-        <ActivitySection events={events} loading={eventsLoading} error={eventsError} onRefresh={refreshEvents} />
-      )}
+      <InviteMemberModal open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={handleInvite} />
 
-      {(section === 'protected-pages' || section === 'email-templates' || section === 'security') && (
-        <MembersPlaceholder section={section} />
-      )}
-    </div>
+      <ConfirmationModal
+        open={removeTarget !== null}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={() => void handleRemove()}
+        title="Remove member?"
+        message={
+          removeTarget
+            ? `${removeTarget.displayName || removeTarget.email || 'This member'} (${removeTarget.email || 'no email'}) will lose access to this project. This does not delete their Forge account.`
+            : ''
+        }
+        confirmLabel="Remove access"
+        variant="danger"
+        loading={removeBusy}
+      />
+    </>
   );
 }

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  fetchPlanCatalogue, fetchUsageSummary, openBillingPortal, startCheckout,
+  fetchPlanCatalogue, fetchUsageSummary, openBillingPortal,
   type PlanCatalogue, type PlanKey, type UsageSummary,
 } from '@/pages/projects/sandbox/sandboxBilling';
 import './pricing-page.css';
@@ -58,6 +58,27 @@ type ConfirmState = 'idle' | 'confirming' | 'confirmed' | 'timeout';
 
 function ForgePricingLogo() {
   return <span className="forge-pricing-logo" aria-label="Forge"><i aria-hidden="true" /><b>Forge</b></span>;
+}
+
+/* Stripe's hosted pages refuse to render inside an iframe. In the readdy
+   preview the app runs in an iframe, so navigate the top window instead. */
+function openExternal(url: string): void {
+  try {
+    if (window.self !== window.top) {
+      window.top.location.assign(url);
+      return;
+    }
+  } catch {
+    /* sandboxed without top-navigation — try a new tab below */
+  }
+
+  // Stripe refuses to render inside an iframe (X-Frame-Options). When the
+  // preview iframe blocks top-navigation, open Stripe in a fresh top-level tab.
+  const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+  if (newTab) return;
+
+  // Last resort: navigate the current window.
+  window.location.assign(url);
 }
 
 function percentage(used: number, limit: number | null): number {
@@ -178,6 +199,9 @@ export default function PricingPage() {
     } else if (billing === 'cancelled') {
       clearIntent();
       setNotice({ kind: 'info', text: 'Checkout cancelled. Your current plan has not changed.' });
+    } else if (billing === 'invalid') {
+      clearIntent();
+      setNotice({ kind: 'error', text: 'That plan or billing interval is not available. Please choose a plan below.' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -189,24 +213,7 @@ export default function PricingPage() {
     try {
       const result = await openBillingPortal();
       if (result.ok) {
-        window.location.assign(result.url);
-        return;
-      }
-      setNotice({ kind: 'error', text: result.message });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleCheckout(plan: DisplayPlan): Promise<void> {
-    if (busy) return;
-    setBusy(plan.key);
-    setNotice(null);
-    try {
-      try { window.sessionStorage.setItem(INTENT_KEY, JSON.stringify({ planKey: plan.key, interval })); } catch { /* best-effort */ }
-      const result = await startCheckout(plan.key, interval);
-      if (result.ok) {
-        window.location.assign(result.url);
+        openExternal(result.url);
         return;
       }
       setNotice({ kind: 'error', text: result.message });
@@ -224,22 +231,26 @@ export default function PricingPage() {
     }
 
     if (plan.key === 'free') {
-      if (!isAuthenticated) navigate('/login');
+      if (!isAuthenticated) navigate('/login?redirect=/pricing');
       return;
     }
 
+    // Paid plan — store only the safe intended plan + interval (never a price
+    // ID or Stripe object), then hand off through real auth where needed.
     if (!isAuthenticated) {
       try { window.sessionStorage.setItem(INTENT_KEY, JSON.stringify({ planKey: plan.key, interval })); } catch { /* best-effort */ }
-      navigate('/login?redirect=/pricing');
+      navigate(`/login?redirect=${encodeURIComponent(`/checkout?plan=${plan.key}&interval=${interval}`)}`);
       return;
     }
 
     if (!pricingConfigured) {
-      setNotice({ kind: 'error', text: 'Billing is not configured yet. Please try again shortly.' });
+      setNotice({ kind: 'error', text: 'Billing temporarily unavailable. Please try again shortly.' });
       return;
     }
 
-    void handleCheckout(plan);
+    // Checkout re-validates plan/interval and resolves the Stripe price
+    // server-side from a fixed lookup key — the browser only ever sends these two.
+    navigate(`/checkout?plan=${plan.key}&interval=${interval}`);
   }
 
   const NoticeIcon = notice?.kind === 'error' ? AlertTriangle : ShieldCheck;
@@ -290,6 +301,12 @@ export default function PricingPage() {
         {notice && confirmState !== 'confirming' && confirmState !== 'timeout' && (
           <div className={`forge-pricing-notice${notice.kind === 'error' ? ' forge-pricing-notice--error' : ''}`} role="status" aria-live="polite">
             <NoticeIcon />{notice.text}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">×</button>
+          </div>
+        )}
+
+        {isAuthenticated && catalogue && !pricingConfigured && (
+          <div className="forge-pricing-notice forge-pricing-notice--error" role="status" aria-live="polite">
+            <AlertTriangle />Billing temporarily unavailable. Paid plans will be available here shortly.
           </div>
         )}
 

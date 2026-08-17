@@ -5,6 +5,15 @@ import { HeroContent } from '@/components/feature/HeroContent';
 import { WorkflowSteps } from '@/components/feature/WorkflowSteps';
 import { ArchitectureStrip } from '@/components/feature/ArchitectureStrip';
 import { TrustStrip } from '@/components/feature/TrustStrip';
+import { ProductFeatures } from '@/components/feature/ProductFeatures';
+import { AgentSystemShowcase } from '@/components/feature/AgentSystemShowcase';
+import { OwnershipSection } from '@/components/feature/OwnershipSection';
+import { UseCasesSection } from '@/components/feature/UseCasesSection';
+import { StartingPointsSection } from '@/components/feature/StartingPointsSection';
+import { TrustEvidenceSection } from '@/components/feature/TrustEvidenceSection';
+import { HomePricingTeaser } from '@/components/feature/HomePricingTeaser';
+import { HomeFaq } from '@/components/feature/HomeFaq';
+import { FinalCta } from '@/components/feature/FinalCta';
 import { Zap, ChevronDown, ArrowUpRight } from 'lucide-react';
 import SandboxLayout from '@/layouts/SandboxLayout';
 import { ProjectToolbar } from '@/components/sandbox/ProjectToolbar';
@@ -73,23 +82,31 @@ export default function HeroPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
             <div>
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-forge-amber/25 bg-forge-amber/8 text-xs font-medium text-forge-amber mb-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-forge-amber animate-pulse" aria-hidden="true" />
-                Live Workspace
+                <span className="w-1.5 h-1.5 rounded-full bg-forge-amber" aria-hidden="true" />
+                Interactive workspace preview
               </span>
               <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-                Start building right now
+                Explore the Forge workspace
               </h2>
               <p className="mt-2 text-sm text-white/50 max-w-lg">
-                This is a fully functional workspace. Add pages, generate images, chat with the agent, and watch your site come together in real time.
+                Preview how projects, pages, AI-assisted planning, tasks and build activity come together inside Forge.
               </p>
             </div>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-white/15 text-white/60 text-sm whitespace-nowrap hover:border-white/30 hover:text-white transition-colors"
-            >
-              Full workspace
-              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/projects/new"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-forge-amber text-[#0B0D10] text-sm font-semibold whitespace-nowrap hover:bg-forge-amber/90 transition-colors"
+              >
+                Create a project
+              </Link>
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-white/15 text-white/70 text-sm whitespace-nowrap hover:border-white/30 hover:text-white transition-colors"
+              >
+                Open the full workspace
+                <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </div>
           </div>
 
           {/* Embedded sandbox */}
@@ -109,16 +126,43 @@ export default function HeroPage() {
         </div>
       </section>
 
+      {/* Product features showcase */}
+      <ProductFeatures />
+
       {/* Workflow Section */}
       <section id="how-it-works" className="relative py-20 md:py-28 bg-forge-bg scroll-mt-16">
         <WorkflowSteps />
       </section>
 
+      {/* AI agent system showcase */}
+      <AgentSystemShowcase />
+
       {/* Architecture Pipeline */}
       <ArchitectureStrip />
 
+      {/* Ownership / control section */}
+      <OwnershipSection />
+
+      {/* Use cases */}
+      <UseCasesSection />
+
+      {/* Starting points */}
+      <StartingPointsSection />
+
+      {/* Trust evidence */}
+      <TrustEvidenceSection />
+
       {/* Trust Strip */}
       <TrustStrip />
+
+      {/* Pricing teaser */}
+      <HomePricingTeaser />
+
+      {/* FAQ */}
+      <HomeFaq />
+
+      {/* Final CTA */}
+      <FinalCta />
 
       {/* Bottom footer strip */}
       <footer className="py-12" style={{ backgroundColor: '#0B0D10' }}>

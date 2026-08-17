@@ -37,15 +37,17 @@ export function PublicHeader() {
 
   const handleNavClick = useCallback(
     (href: string) => {
+      setMobileOpen(false);
       if (href.startsWith('#')) {
         const el = document.querySelector(href);
         if (el) {
+          // Unlock body scroll before smooth-scrolling so the anchor jump isn't blocked
+          document.body.style.overflow = '';
           el.scrollIntoView({ behavior: 'smooth' });
         }
       } else {
         navigate(href);
       }
-      setMobileOpen(false);
     },
     [navigate]
   );

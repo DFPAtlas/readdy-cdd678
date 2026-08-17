@@ -155,7 +155,11 @@ export function ContentSection({ collection, items, role, loading, error, onRefr
           <EmptyState
             title={items.length === 0 ? 'No items yet' : 'No items match'}
             description={items.length === 0 ? `Add your first ${collection.singularName.toLowerCase()} to this collection.` : 'Try adjusting your search or filters.'}
-            action={items.length === 0 && canEdit ? <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => { setEditingItem(null); setShowCreate(true); }}>Add item</Button> : undefined}
+            action={
+              items.length === 0
+                ? (canEdit ? <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => { setEditingItem(null); setShowCreate(true); }}>Add item</Button> : undefined)
+                : <Button variant="secondary" size="sm" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Clear search</Button>
+            }
           />
         </div>
       ) : view === 'table' ? (

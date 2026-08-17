@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
-import { Plus, Trash2, Plug, RefreshCw, FlaskConical } from 'lucide-react';
+import { Plus, Trash2, Plug } from 'lucide-react';
 import type { WorkflowConnection, ConnectionType, ConnectionStatus } from '../workflowTypes';
 import { CONNECTION_TYPES } from '../workflowTypes';
 import { listConnections, createConnection, updateConnection, deleteConnection } from '../workflowData';
@@ -22,7 +22,6 @@ export function ConnectionsSection({ projectId, role, onRefresh }: {
   const [showCreate, setShowCreate] = useState(false);
   const [type, setType] = useState<ConnectionType>('resend');
   const [name, setName] = useState('');
-  const [note, setNote] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<WorkflowConnection | null>(null);
 
   const canManage = role === 'owner' || role === 'admin';
@@ -76,8 +75,6 @@ export function ConnectionsSection({ projectId, role, onRefresh }: {
                 <p className="text-xs text-forge-text-muted mt-0.5">{typeLabel(c.connectionType)} · credentials masked (••••••••)</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="sm" icon={<FlaskConical className="h-3.5 w-3.5" />} onClick={() => setNote('Connection testing ships with the execution engine — server-side validation is pending.')}>Test</Button>
-                <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => setNote('Credential rotation ships with the execution engine — no secrets are stored client-side.')}>Rotate</Button>
                 {canManage && (
                   <>
                     <Button variant="ghost" size="sm" onClick={() => toggle(c)}>{c.status === 'enabled' ? 'Disable' : 'Enable'}</Button>
@@ -88,10 +85,6 @@ export function ConnectionsSection({ projectId, role, onRefresh }: {
             </div>
           ))}
         </div>
-      )}
-
-      {note && (
-        <div className="mt-3 px-3 py-2 rounded-md bg-forge-accent/10 text-forge-accent text-xs">{note}</div>
       )}
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add connection">

@@ -2562,6 +2562,17 @@ export default function ForgeSandbox() {
             )}
           </aside>
         )}
+
+        <footer className="statusbar">
+          <div className="status-tabs">
+            {[{ n: "Activity", i: Activity }, { n: "Logs", i: Logs }, { n: "Problems", i: Circle }, { n: "Changes", i: RotateCcw }, { n: "Console", i: TerminalSquare }].map(({ n, i: Icon }) => (
+              <button key={n} className={bottomTab === n ? "active" : ""} onClick={() => { if (n === "Changes") openVersionHistory(); else if (n === "Problems") openProblems(); else setBottomTab(n); }}><Icon size={16} />{n}{n === "Problems" && <b>{validationResult?.issues.length ?? 0}</b>}{n === "Changes" && <b>{currentVersionNumber ?? 0}</b>}</button>
+            ))}
+          </div>
+          <div className="preview-ready"><span />{pages.length} page{pages.length === 1 ? "" : "s"}</div>
+          <div className="service-list">{services.map((service) => <button key={service}><span />{service}</button>)}</div>
+          <button className="settings-button" onClick={() => notify("System settings opened")}><Settings size={20} /></button>
+        </footer>
       </section>
 
       {panels.assistant.mode !== "docked" && (
@@ -2569,17 +2580,6 @@ export default function ForgeSandbox() {
           <Sparkles size={17} />AI
         </button>
       )}
-
-      <footer className="statusbar">
-        <div className="status-tabs">
-          {[{ n: "Activity", i: Activity }, { n: "Logs", i: Logs }, { n: "Problems", i: Circle }, { n: "Changes", i: RotateCcw }, { n: "Console", i: TerminalSquare }].map(({ n, i: Icon }) => (
-            <button key={n} className={bottomTab === n ? "active" : ""} onClick={() => { if (n === "Changes") openVersionHistory(); else if (n === "Problems") openProblems(); else setBottomTab(n); }}><Icon size={16} />{n}{n === "Problems" && <b>{validationResult?.issues.length ?? 0}</b>}{n === "Changes" && <b>{currentVersionNumber ?? 0}</b>}</button>
-          ))}
-        </div>
-        <div className="preview-ready"><span />{pages.length} page{pages.length === 1 ? "" : "s"}</div>
-        <div className="service-list">{services.map((service) => <button key={service}><span />{service}</button>)}</div>
-        <button className="settings-button" onClick={() => notify("System settings opened")}><Settings size={20} /></button>
-      </footer>
 
       <CreatePageDialog
         open={createPageOpen}

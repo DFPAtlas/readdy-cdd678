@@ -36,7 +36,7 @@ export function BuildActivityDrawer() {
         >{Math.round(buildProgress)}%</span>
           )}
           <span className="text-[10px] text-forge-text-muted"
-        >3 running</span>
+        >Example activity</span>
         </div>
         <ChevronUp className="h-3.5 w-3.5 text-forge-text-muted" />
       </div>
@@ -68,6 +68,7 @@ export function BuildActivityDrawer() {
           </button>
         ))}
         <div className="flex-1" />
+        <span className="text-[10px] text-forge-text-muted mr-2 whitespace-nowrap">Workspace preview</span>
         <button
           onClick={toggleBottomDrawer}
           className="h-6 w-6 flex items-center justify-center rounded text-forge-text-muted hover:text-forge-text-primary hover:bg-forge-hover transition-colors"

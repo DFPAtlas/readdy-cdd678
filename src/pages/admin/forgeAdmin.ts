@@ -21,6 +21,29 @@ export const ADMIN_ROLES: { value: AdminRole; label: string }[] = [
 
 export type AdminInfo = { role: AdminRole; permissions: string[] };
 
+export function isOwner(admin: AdminInfo | null | undefined): boolean {
+  return admin?.role === 'super_admin';
+}
+
+export type OwnerBusiness = {
+  customers: number;
+  activeSubscriptions: number;
+  pastDueSubscriptions: number;
+  trialingSubscriptions: number;
+  scheduledCancellations: number;
+  activeProjects: number;
+  buildsToday: number;
+  aiJobsQueued: number;
+  failedBuilds: number;
+  mrr: { status: 'available' | 'unavailable'; value: number | null; reason: string };
+};
+
+export type OwnerSnapshot = { business: OwnerBusiness; usage: { aiLedger24h: number; aiLedgerTotal: number }; checkedAt: string };
+
+export type ActivityFeedItem = { id: string; type: string; title: string; detail: string; at: string | null };
+
+export type SupportSessionRow = { id: string; admin_user_id: string; project_id: string; reason: string | null; status: string; scope: string | null; expires_at: string | null; created_at: string };
+
 export type DashboardSummary = {
   activeUsers: number;
   activeSubscriptions: number;
@@ -36,6 +59,7 @@ export type DashboardSummary = {
   templateQueue: number;
   securityAlerts: number;
   openIncidents: number;
+  failedBuilds: number;
 };
 
 export type HealthService = { status: 'healthy' | 'degraded' | 'down' | 'unknown'; responseTimeMs: number | null; safeError: string | null };
@@ -61,11 +85,126 @@ export type ProjectMeta = {
   recentDeployments: { id: string; status: string; environment: string; created_at: string }[];
 };
 
+/* ── Customers ── */
+export type CustomerSummary = { totalAccounts: number; activePaid: number; trialing: number; pastDue: number; newThisMonth: number };
+
+export type CustomerRow = {
+  id: string; email: string | null; displayName: string | null; createdAt: string;
+  plan: string | null; subscriptionStatus: string | null; billingInterval: string | null;
+  projectCount: number; lastActivity: string | null; adminRole: string | null; adminActive: boolean;
+};
+
+export type CustomerDetail = {
+  account: { id: string; email: string | null; displayName: string | null; createdAt: string };
+  subscription: { planKey: string | null; status: string | null; billingInterval: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean | null; trialEnd: string | null; stripeCustomerId: string | null } | null;
+  projects: { id: string; name: string; slug: string; status: string; pageCount: number; createdAt: string; updatedAt: string }[];
+  usage: { aiRequests: number; aiCredits: number; aiTokens: number; aiCostMicros: number; storageBytes: number; periodStart: string };
+  supportNotes: { reason: string | null; createdAt: string }[];
+  recentBuilds: { id: string; projectId: string; status: string; completedAt: string | null }[];
+};
+
+/* ── Projects ── */
+export type ProjectSummary = { totalProjects: number; activeProjects: number; failedBuilds: number; recentProjects: number };
+
+export type AdminProjectRow = {
+  id: string; name: string; slug: string; status: string;
+  ownerEmail: string | null; ownerName: string | null; workspaceName: string | null;
+  pageCount: number; createdAt: string; updatedAt: string;
+  latestBuildStatus: string | null; plan: string | null; subscriptionStatus: string | null; storageBytes: number;
+};
+
+export type AdminProjectDetail = {
+  id: string; name: string; slug: string; status: string; pageCount: number; createdAt: string; updatedAt: string;
+  workspaceName: string | null;
+  owner: { id: string | null; email: string | null; displayName: string | null; plan: string | null; subscriptionStatus: string | null };
+  memberCount: number; members: { userId: string; role: string; status: string; email: string | null; displayName: string | null }[];
+  buildCount: number; latestBuild: { id: string; status: string; version: string | null; completedAt: string | null } | null;
+  deploymentCount: number; domainCount: number; formCount: number; aiJobCount: number; storageBytes: number;
+  recentDeployments: { id: string; status: string; environment: string; created_at: string }[];
+  recentIssues: { kind: string; id: string; status: string; at: string | null }[];
+};
+
+/* ── Billing ── */
+export type BillingSummary = {
+  mrr: number; activeSubscriptions: number; trialing: number; pastDue: number; cancellations: number; failedPayments: number;
+  pricingSource: string; calculatedAt: string;
+};
+
+export type BillingSubRow = {
+  id: string; userId: string; planKey: string; status: string; billingInterval: string | null;
+  currentPeriodStart: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean | null; trialEnd: string | null;
+  stripeSubscriptionId: string | null; stripeCustomerId: string | null; createdAt: string; updatedAt: string;
+  customerEmail: string | null; customerName: string | null; amount: number; monthlyAmount: number;
+};
+
+export type PaymentProblem = {
+  kind: string; id: string; userId?: string; customerEmail?: string | null; customerName?: string | null;
+  planKey?: string; amount?: number; status?: string; at: string | null; detail: string; eventType?: string;
+};
+
+/* ── Usage ── */
+export type UsageSummary = {
+  aiRequests: number; aiTokens: number; aiCredits: number; aiCostMicros: number; hasCostData: boolean;
+  builds: number; exports: number; storageBytes: number; workflowRuns: number; aiJobs: number;
+  periodStart: string; periodDays: number;
+};
+
+export type UsageCustomerRow = {
+  userId: string; email: string | null; displayName: string | null; plan: string; subscriptionStatus: string | null;
+  aiCredits: number; aiCreditLimit: number | null; builds: number; storageBytes: number; storageLimitMb: number | null; projects: number;
+};
+
+export type BuildRow = {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  ownerEmail: string | null;
+  status: string;
+  buildNumber: number | null;
+  version: string | null;
+  environment: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+  warningCount: number | null;
+  errorCount: number | null;
+  failureCode: string | null;
+  requestedBy: string | null;
+};
+
+export type BuildsSummary = { running: number; queued: number; failed: number; succeeded: number };
+
+export type BuildDetail = {
+  id: string; projectId: string; projectName: string | null; ownerEmail: string | null;
+  status: string; buildNumber: number | null; version: string | null; environment: string | null;
+  startedAt: string | null; completedAt: string | null; duration: number | null;
+  warningCount: number | null; errorCount: number | null;
+  failureCode: string | null; failureMessage: string | null; cancelledAt: string | null;
+  logAvailable: boolean; logNote: string;
+};
+
+export type AttentionItem = {
+  key: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  count: number;
+};
+
 export type BillingEventRow = Record<string, unknown> & { id: string; event_type?: string; processing_status?: string; received_at?: string };
 
 export type AiModel = Record<string, unknown> & { id: string; model_key?: string; enabled?: boolean; routing_priority?: number; capabilities?: unknown; allowed_plans?: unknown };
 export type AiProvider = Record<string, unknown> & { id: string; provider_key?: string; status?: string; display_name?: string; last_health_check?: string };
-export type AiOverview = { providers: AiProvider[]; models: AiModel[]; queueDepth: number; flags: { flag_key: string; enabled: boolean }[] };
+
+export type AiProviderUsage = { requests: number; failures: number; tokens: number; costMicros: number; durationMs: number };
+export type AiUsageAgg = {
+  byProvider: Record<string, AiProviderUsage>;
+  totalTokens: number; totalCostMicros: number; hasCostData: boolean;
+  totalFailures: number; totalRequests: number; periodDays: number;
+};
+export type AiFailure = { provider: string | null; model: string | null; taskClass: string | null; errorCode: string | null; at: string | null; source: string };
+
+export type AiOverview = { providers: AiProvider[]; models: AiModel[]; queueDepth: number; flags: { flag_key: string; enabled: boolean }[]; usage: AiUsageAgg; failures: AiFailure[] };
 
 export type DeploymentRow = Record<string, unknown> & { id: string; status?: string; environment?: string; created_at?: string };
 
@@ -77,9 +216,17 @@ export type FeatureFlag = { id: string; flag_key: string; enabled: boolean; conf
 
 export type Incident = { id: string; severity: string; title: string; affected_services: string[] | null; status: string; incident_lead: string | null; started_at: string; resolved_at: string | null; created_at: string };
 
-export type AdminRecord = { user_id: string; role: AdminRole; permissions: string[] | null; active: boolean; created_at: string };
+export type AdminRecord = {
+  user_id: string; role: AdminRole; permissions: string[] | null; active: boolean; created_at: string;
+  email: string | null; displayName: string | null; grantedByEmail: string | null; lastActivity: string | null;
+};
 
-export type AuditEvent = { id: string; admin_user_id: string; action: string; target_type: string | null; target_id: string | null; reason: string | null; safe_metadata: Record<string, unknown> | null; created_at: string };
+export type AuditEvent = {
+  id: string; adminUserId: string;
+  adminEmail: string | null; adminName: string | null; adminRole: string | null;
+  action: string; targetType: string | null; targetId: string | null;
+  reason: string | null; safeMetadata: Record<string, unknown> | null; createdAt: string;
+};
 
 export type ReleaseCheck = { key: string; label: string; status: 'verified' | 'unverified'; critical: boolean };
 export type ReleaseGate = { result: 'GO' | 'CONDITIONAL GO' | 'NO-GO'; checklist: ReleaseCheck[]; criticalUnverified: number };
@@ -105,20 +252,27 @@ export const adminApi = {
   dashboard: () => invoke<{ summary: DashboardSummary }>('dashboard'),
   health: () => invoke<HealthResult & { services: Record<string, HealthService>; checkedAt: string }>('health'),
   security: () => invoke<{ items: SecurityItem[]; checkedAt: string }>('security'),
+  buildsList: (status?: string) => invoke<{ builds: BuildRow[]; summary: BuildsSummary }>('builds.list', { status }),
+  buildsGet: (buildId: string) => invoke<{ build: BuildDetail }>('builds.get', { buildId }),
+  attention: () => invoke<{ items: AttentionItem[]; checkedAt: string }>('attention'),
 
   usersList: (query = '') => invoke<{ users: UserRow[] }>('users.list', { query }),
+  customersList: (opts?: { query?: string; plan?: string; status?: string; page?: number; pageSize?: number }) => invoke<{ customers: CustomerRow[]; total: number; page: number; pageSize: number; summary: CustomerSummary }>('customers.list', { ...opts }),
+  customersGet: (userId: string) => invoke<{ customer: CustomerDetail }>('customers.get', { userId }),
   suspendUser: (userId: string, reason: string) => invoke('users.suspend', { userId, reason }),
   restoreUser: (userId: string, reason: string) => invoke('users.restore', { userId, reason }),
   revokeSessions: (userId: string, reason: string) => invoke('users.revoke_sessions', { userId, reason }),
   resetPassword: (userId: string) => invoke('users.reset_password', { userId }),
   addNote: (userId: string, note: string) => invoke('users.note', { userId, note }),
 
-  projectsList: () => invoke<{ projects: ProjectRow[] }>('projects.list'),
-  projectGet: (projectId: string) => invoke<{ project: ProjectMeta }>('projects.get', { projectId }),
+  projectsList: (opts?: { query?: string; status?: string; plan?: string; buildState?: string; page?: number; pageSize?: number }) => invoke<{ projects: AdminProjectRow[]; total: number; page: number; pageSize: number; summary: ProjectSummary }>('projects.list', { ...opts }),
+  projectGet: (projectId: string) => invoke<{ project: AdminProjectDetail }>('projects.get', { projectId }),
   supportStart: (projectId: string, reason: string, durationMinutes: number) => invoke<{ session: { id: string; expiresAt: string }; message: string }>('support.start', { projectId, reason, durationMinutes }),
   supportEnd: (sessionId: string) => invoke('support.end', { sessionId }),
 
-  billingList: () => invoke<{ subscriptions: Record<string, unknown>[] }>('billing.list'),
+  billingList: (status?: string) => invoke<{ subscriptions: BillingSubRow[] }>('billing.list', { status }),
+  billingSummary: () => invoke<{ summary: BillingSummary }>('billing.summary'),
+  billingPaymentProblems: () => invoke<{ items: PaymentProblem[] }>('billing.payment_problems'),
   billingEvents: () => invoke<{ events: BillingEventRow[] }>('billing.events'),
   billingReplay: (eventId: string) => invoke('billing.replay', { eventId }),
   billingRefresh: (userId: string) => invoke('billing.refresh', { userId }),
@@ -151,9 +305,16 @@ export const adminApi = {
   dataDelete: (userId: string, reason: string, confirm: boolean) => invoke<{ affected: { projects: number; subscriptions: number } }>('data.delete', { userId, reason, confirm }),
 
   releaseGate: () => invoke<ReleaseGate>('release.gate'),
-  adminsList: () => invoke<{ admins: AdminRecord[] }>('admins.list'),
+  adminsList: () => invoke<{ admins: AdminRecord[]; ownerCount: number }>('admins.list'),
   adminsSet: (userId: string, role: AdminRole, active: boolean, reason: string) => invoke('admins.set', { userId, role, active, reason }),
-  auditList: () => invoke<{ events: AuditEvent[] }>('audit.list'),
+  auditList: (opts?: { query?: string; actionFilter?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number }) => invoke<{ events: AuditEvent[]; total: number; page: number; pageSize: number; actions: string[] }>('audit.list', { ...opts }),
+
+  usageSummary: () => invoke<{ summary: UsageSummary }>('usage.summary'),
+  usageCustomers: (opts?: { page?: number; pageSize?: number }) => invoke<{ customers: UsageCustomerRow[]; total: number; page: number; pageSize: number; plans: string[] }>('usage.customers', { ...opts }),
+
+  ownerSnapshot: () => invoke<OwnerSnapshot>('owner.snapshot'),
+  ownerActivity: () => invoke<{ customers: ActivityFeedItem[]; platform: ActivityFeedItem[]; checkedAt: string }>('owner.activity'),
+  supportList: () => invoke<{ sessions: SupportSessionRow[] }>('support.list'),
 };
 
 export function roleLabel(role: string | null | undefined): string {

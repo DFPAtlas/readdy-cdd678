@@ -73,6 +73,18 @@ export function StatCard({ label, value, icon, tone = 'amber', hint }: { label: 
   );
 }
 
+export function EnvironmentBadge({ environment }: { environment: string | null | undefined }) {
+  const env = (environment ?? '').toLowerCase();
+  const map: Record<string, { cls: string; label: string }> = {
+    development: { cls: 'bg-forge-border text-forge-text-secondary', label: 'DEV' },
+    staging: { cls: 'bg-forge-accent/10 text-forge-accent', label: 'STAGING' },
+    production: { cls: 'bg-forge-amber/15 text-forge-amber', label: 'PRODUCTION' },
+    sandbox: { cls: 'bg-forge-border text-forge-text-muted', label: 'SANDBOX' },
+  };
+  const m = map[env] ?? { cls: 'bg-forge-border text-forge-text-secondary', label: (environment || '—').toUpperCase() };
+  return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${m.cls}`}>{m.label}</span>;
+}
+
 export function StatusPill({ status }: { status: string | null | undefined }) {
   const s = (status ?? 'unknown').toLowerCase();
   const map: Record<string, { cls: string; label: string }> = {
@@ -91,6 +103,22 @@ export function StatusPill({ status }: { status: string | null | undefined }) {
     critical: { cls: 'bg-forge-error/10 text-forge-error', label: 'Critical' },
     major: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Major' },
     minor: { cls: 'bg-forge-accent/10 text-forge-accent', label: 'Minor' },
+    warning: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Warning' },
+    info: { cls: 'bg-forge-accent/10 text-forge-accent', label: 'Info' },
+    success: { cls: 'bg-forge-success/10 text-forge-success', label: 'Success' },
+    completed: { cls: 'bg-forge-success/10 text-forge-success', label: 'Completed' },
+    running: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Running' },
+    queued: { cls: 'bg-forge-border text-forge-text-secondary', label: 'Queued' },
+    pending: { cls: 'bg-forge-border text-forge-text-secondary', label: 'Pending' },
+    cancelled: { cls: 'bg-forge-border text-forge-text-muted', label: 'Cancelled' },
+    error: { cls: 'bg-forge-error/10 text-forge-error', label: 'Error' },
+    paused: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Paused' },
+    connected: { cls: 'bg-forge-success/10 text-forge-success', label: 'Connected' },
+    disconnected: { cls: 'bg-forge-border text-forge-text-muted', label: 'Disconnected' },
+    attention: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Needs attention' },
+    testing: { cls: 'bg-forge-amber/10 text-forge-amber', label: 'Testing' },
+    expired: { cls: 'bg-forge-warning/10 text-forge-warning', label: 'Expired' },
+    revoked: { cls: 'bg-forge-border text-forge-text-muted', label: 'Revoked' },
   };
   const m = map[s] ?? { cls: 'bg-forge-border text-forge-text-secondary', label: status ?? '—' };
   return <span className={`inline-flex items-center rounded px-1.5 py-0 text-[10px] font-medium ${m.cls}`}>{m.label}</span>;

@@ -1,84 +1,236 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useProfile } from '@/hooks/useProfile';
+import { updateDisplayName, type ProfileData } from '@/services/profileService';
+import { getSupabaseClient } from '@/services/supabaseClient';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { demoUser } from '@/services/mock/demoData';
-import { User, Save } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/pages/dashboard/components/LinkButton';
+import { Lock, Copy, Check, LogOut } from 'lucide-react';
 
-export default function SettingsProfilePage() {
-  const [profile, setProfile] = useState({
-    displayName: demoUser.displayName,
-    email: demoUser.email,
-    jobTitle: 'Lead Developer',
-    organization: 'Forge Workshop',
-    timezone: 'America/Los_Angeles',
-    locale: 'en-US',
-  });
-  const [saved, setSaved] = useState(true);
+function ProfileSkeleton() {
+  return (
+    <div className="max-w-xl space-y-4">
+      <Skeleton className="h-6 w-32" />
+      <Skeleton className="h-4 w-72 max-w-full" />
+      <Skeleton className="h-40" />
+      <Skeleton className="h-32" />
+    </div>
+  );
+}
 
-  const handleChange = (key: string, value: string) => {
-    setProfile({ ...profile, [key]: value });
-    setSaved(false);
+function planLabel(planKey: string | null): string {
+  if (!planKey) return 'Free';
+  return planKey.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function ProfileContent({ data }: { data: ProfileData }) {
+  const navigate = useNavigate();
+  const [name, setName] = useState(data.displayName ?? '');
+  const [savedName, setSavedName] = useState(data.displayName ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const dirty = name.trim() !== savedName.trim();
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveState('idle');
+    setSaveError('');
+    const res = await updateDisplayName(name);
+    setSaving(false);
+    if (res.ok) {
+      setSavedName(name.trim());
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2000);
+    } else {
+      setSaveState('error');
+      setSaveError(res.message);
+    }
+  };
+
+  const handleCopyId = async () => {
+    if (!data.userId) return;
+    try {
+      await navigator.clipboard.writeText(data.userId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — ignore.
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    const supabase = getSupabaseClient();
+    if (supabase) await supabase.auth.signOut();
+    navigate('/login');
   };
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="max-w-xl space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-forge-text-primary">Profile</h2>
+        <p className="text-sm text-forge-text-muted mt-0.5">
+          Your identity and account details. Email is managed by your authentication provider.
+        </p>
+      </div>
+
       <Card className="p-4">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center">
-            <span className="text-2xl font-bold text-amber-500">{demoUser.initials}</span>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground-950">{profile.displayName}</h3>
-            <p className="text-xs text-foreground-500">{profile.email}</p>
-            <Button variant="ghost" size="sm" className="text-xs mt-1">Change Avatar</Button>
+        <div className="flex items-center gap-4">
+          {data.avatarUrl ? (
+            <img
+              src={data.avatarUrl}
+              alt={data.displayName ?? 'Avatar'}
+              className="h-14 w-14 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-14 w-14 rounded-full bg-forge-amber/15 text-forge-amber flex items-center justify-center text-lg font-semibold">
+              {data.initials ?? '?'}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-forge-text-primary truncate">
+              {data.displayName ?? data.email ?? 'Forge user'}
+            </p>
+            {data.email && <p className="text-xs text-forge-text-muted truncate">{data.email}</p>}
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="mt-5 space-y-4">
           <div>
-            <label className="text-xs font-medium text-foreground-700 mb-1 block">Display Name</label>
-            <input value={profile.displayName} onChange={(e) => handleChange('displayName', e.target.value)} className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 text-foreground-950" />
+            <label htmlFor="display-name" className="block text-xs font-medium text-forge-text-secondary mb-1.5">
+              Display name
+            </label>
+            <Input
+              id="display-name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setSaveState('idle');
+              }}
+              className="w-full"
+            />
           </div>
+
           <div>
-            <label className="text-xs font-medium text-foreground-700 mb-1 block">Email</label>
-            <input value={profile.email} onChange={(e) => handleChange('email', e.target.value)} type="email" className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 text-foreground-950" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-foreground-700 mb-1 block">Job Title</label>
-              <input value={profile.jobTitle} onChange={(e) => handleChange('jobTitle', e.target.value)} className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 text-foreground-950" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground-700 mb-1 block">Organization</label>
-              <input value={profile.organization} onChange={(e) => handleChange('organization', e.target.value)} className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 text-foreground-950" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-foreground-700 mb-1 block">Timezone</label>
-              <select value={profile.timezone} onChange={(e) => handleChange('timezone', e.target.value)} className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg bg-white text-foreground-950 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                <option value="America/Los_Angeles">Pacific (UTC-8)</option>
-                <option value="America/Chicago">Central (UTC-6)</option>
-                <option value="America/New_York">Eastern (UTC-5)</option>
-                <option value="Europe/London">London (UTC+0)</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground-700 mb-1 block">Locale</label>
-              <select value={profile.locale} onChange={(e) => handleChange('locale', e.target.value)} className="w-full h-9 px-3 text-sm border border-background-200 rounded-lg bg-white text-foreground-950 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                <option value="en-US">English (US)</option>
-                <option value="en-GB">English (UK)</option>
-              </select>
-            </div>
+            <label htmlFor="email" className="block text-xs font-medium text-forge-text-secondary mb-1.5">
+              Email
+            </label>
+            <Input id="email" value={data.email ?? ''} disabled className="w-full" />
+            <p className="text-xs text-forge-text-muted mt-1.5">
+              Email is read-only here — it is managed by your authentication provider.
+            </p>
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-background-100">
-          <Button size="sm" onClick={() => setSaved(true)} disabled={saved} icon={<Save className="h-3.5 w-3.5" />}>
-            {saved ? 'Saved' : 'Save Changes'}
+        <div className="mt-5 pt-4 border-t border-forge-border-subtle flex items-center gap-3">
+          <Button size="sm" onClick={handleSave} loading={saving} disabled={!dirty || saving}>
+            {saving ? 'Saving…' : 'Save changes'}
           </Button>
+          {saveState === 'saved' && (
+            <span className="text-xs text-forge-success flex items-center gap-1">
+              <Check className="h-3.5 w-3.5" /> Saved
+            </span>
+          )}
+          {saveState === 'error' && (
+            <span className="text-xs text-forge-error">{saveError}</span>
+          )}
         </div>
       </Card>
+
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-forge-text-primary mb-3">Account information</h3>
+        <dl className="space-y-2.5 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-forge-text-muted">User ID</dt>
+            <dd className="flex items-center gap-2">
+              <span className="font-mono text-xs text-forge-text-secondary max-w-[220px] truncate">
+                {data.userId ?? '—'}
+              </span>
+              {data.userId && (
+                <button
+                  onClick={handleCopyId}
+                  className="h-6 w-6 flex items-center justify-center rounded text-forge-text-muted hover:text-forge-text-primary hover:bg-forge-hover transition-colors"
+                  aria-label="Copy user ID"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-forge-success" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              )}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-forge-text-muted">Account created</dt>
+            <dd className="text-forge-text-primary">{formatDate(data.accountCreatedAt)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-forge-text-muted">Plan</dt>
+            <dd className="flex items-center gap-2">
+              <span className="text-forge-text-primary">{planLabel(data.planKey)}</span>
+              <LinkButton to="/pricing" variant="ghost" size="sm" className="!h-6 !px-1.5 text-xs">
+                View pricing
+              </LinkButton>
+            </dd>
+          </div>
+        </dl>
+      </Card>
+
+      <div className="flex items-center justify-between rounded-lg border border-forge-border-subtle bg-forge-panel p-4">
+        <div>
+          <p className="text-sm text-forge-text-primary">Sign out</p>
+          <p className="text-xs text-forge-text-muted mt-0.5">End your current Forge session.</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={handleSignOut} loading={signingOut} icon={<LogOut className="h-3.5 w-3.5" />}>
+          Sign out
+        </Button>
+      </div>
     </div>
   );
+}
+
+export default function SettingsProfilePage() {
+  const { data, loading, error, retry } = useProfile();
+
+  if (loading) return <ProfileSkeleton />;
+
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load your profile"
+        message="Something went wrong while loading your account details. Please try again."
+        onRetry={retry}
+      />
+    );
+  }
+
+  if (!data.authenticated) {
+    return (
+      <EmptyState
+        icon={<Lock className="h-8 w-8" />}
+        title="Sign in to view your profile"
+        description="You need to be signed in to manage your Forge account details."
+        action={
+          <LinkButton variant="secondary" to="/login">
+            Sign in
+          </LinkButton>
+        }
+      />
+    );
+  }
+
+  return <ProfileContent data={data} />;
 }

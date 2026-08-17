@@ -1,183 +1,236 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Layers, FileText, LayoutTemplate, Link2, Upload, Download, Settings } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Select } from '@/components/ui/Select';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Layers, RefreshCw, Lock, AlertTriangle, Plus, Settings } from 'lucide-react';
+import { useProjectCms } from '@/hooks/useProjectCms';
+import { ProjectSectionHeader } from '@/pages/projects/components/ProjectSectionHeader';
 import { Button } from '@/components/ui/Button';
-import type { CmsCollection, CmsItem } from './cmsTypes';
-import { listCollections, listItems, createCollection, deleteCollection, currentProjectRole } from './cmsData';
-import { CollectionsSection, type CreateCollectionInput } from './components/CollectionsSection';
-import { CollectionBuilder } from './components/CollectionBuilder';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/pages/dashboard/components/LinkButton';
+import { listItems, createCollection, deleteCollection } from './cmsData';
+import type { CmsItem } from './cmsTypes';
+import { CmsOverview } from './components/CmsOverview';
+import { CmsNavRail } from './components/CmsNavRail';
+import { CreateCollectionModal, type CreateCollectionInput } from './components/CreateCollectionModal';
 import { ContentSection } from './components/ContentSection';
-import { PlaceholderSection } from './components/PlaceholderSection';
+import { CollectionBuilder } from './components/CollectionBuilder';
+import { CmsIcon } from './components/CmsIcon';
 
-type SectionKey = 'collections' | 'content' | 'dynamic-pages' | 'relationships' | 'imports' | 'exports' | 'settings';
-
-const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'collections', label: 'Collections', icon: <Layers className="h-3.5 w-3.5" /> },
-  { key: 'content', label: 'Content', icon: <FileText className="h-3.5 w-3.5" /> },
-  { key: 'dynamic-pages', label: 'Dynamic pages', icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
-  { key: 'relationships', label: 'Relationships', icon: <Link2 className="h-3.5 w-3.5" /> },
-  { key: 'imports', label: 'Imports', icon: <Upload className="h-3.5 w-3.5" /> },
-  { key: 'exports', label: 'Exports', icon: <Download className="h-3.5 w-3.5" /> },
-  { key: 'settings', label: 'Settings', icon: <Settings className="h-3.5 w-3.5" /> },
-];
+function CmsSkeleton() {
+  return (
+    <div>
+      <div className="mb-6">
+        <Skeleton className="h-3 w-40 mb-3" />
+        <Skeleton className="h-6 w-32 mb-2" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
+        <Skeleton className="h-72" />
+        <Skeleton className="h-72" />
+      </div>
+    </div>
+  );
+}
 
 export default function CmsPage() {
   const { projectId } = useParams();
-  const [section, setSection] = useState<SectionKey>('collections');
-  const [collections, setCollections] = useState<CmsCollection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [role, setRole] = useState<string | null>(null);
-  const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
-  const [contentCollectionId, setContentCollectionId] = useState<string | null>(null);
+  const { data, loading, error, retry, refresh, refreshing } = useProjectCms(projectId);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [view, setView] = useState<'content' | 'settings'>('content');
+  const [showCreate, setShowCreate] = useState(false);
+
   const [items, setItems] = useState<CmsItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState('');
 
-  const refresh = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError('');
-    const [cols, r] = await Promise.all([listCollections(projectId), currentProjectRole(projectId)]);
-    setCollections(cols);
-    setRole(r);
-    setLoading(false);
-  }, [projectId]);
+  const selectedCollection = data.collections.find((c) => c.id === selectedId) ?? null;
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  const canManage = data.role === 'owner' || data.role === 'admin';
 
-  // Keep the selected content collection valid as collections change.
+  // Keep a valid collection selected as the list changes.
   useEffect(() => {
-    if (collections.length === 0) {
-      if (contentCollectionId) setContentCollectionId(null);
+    if (data.collections.length === 0) {
+      if (selectedId) setSelectedId(null);
       return;
     }
-    if (!contentCollectionId || !collections.some((c) => c.id === contentCollectionId)) {
-      setContentCollectionId(collections[0].id);
+    if (!selectedId || !data.collections.some((c) => c.id === selectedId)) {
+      setSelectedId(data.collections[0].id);
     }
-  }, [collections, contentCollectionId]);
+  }, [data.collections, selectedId]);
 
   const refreshItems = useCallback(async () => {
-    if (!projectId || !contentCollectionId) return;
+    if (!projectId || !selectedId) return;
     setItemsLoading(true);
     setItemsError('');
-    const data = await listItems(projectId, contentCollectionId);
-    setItems(data);
+    const list = await listItems(projectId, selectedId);
+    setItems(list);
     setItemsLoading(false);
-  }, [projectId, contentCollectionId]);
+  }, [projectId, selectedId]);
 
   useEffect(() => {
-    if (section === 'content' && contentCollectionId) void refreshItems();
-  }, [section, contentCollectionId, refreshItems]);
-
-  const openCollection = collections.find((c) => c.id === openCollectionId) ?? null;
-  const contentCollection = collections.find((c) => c.id === contentCollectionId) ?? null;
+    if (selectedId) {
+      setView('content');
+      void refreshItems();
+    }
+  }, [selectedId, refreshItems]);
 
   const handleCreate = async (input: CreateCollectionInput) => {
     if (!projectId) return { ok: false, message: 'Project not found.' };
-    return createCollection(projectId, input);
-  };
-
-  const handleDelete = async (id: string) => {
-    const res = await deleteCollection(id);
-    if (id === openCollectionId) setOpenCollectionId(null);
-    if (id === contentCollectionId) setContentCollectionId(null);
+    const res = await createCollection(projectId, input);
     await refresh();
     return res;
   };
 
+  const handleDelete = async (id: string) => {
+    const res = await deleteCollection(id);
+    if (id === selectedId) {
+      setSelectedId(null);
+      setView('content');
+    }
+    await refresh();
+    return res;
+  };
+
+  if (loading) return <CmsSkeleton />;
+
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load project content"
+        message="Something went wrong while loading this project's CMS content. Please try again."
+        onRetry={retry}
+      />
+    );
+  }
+
+  if (!data.authenticated) {
+    return (
+      <EmptyState
+        icon={<Lock className="h-8 w-8" />}
+        title="Sign in to view this project"
+        description="You need to be signed in to manage your Forge project content."
+        action={<LinkButton variant="secondary" to="/login">Sign in</LinkButton>}
+      />
+    );
+  }
+
+  if (!data.found || !data.project) {
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-8 w-8" />}
+        title="Project not found"
+        description="The project you're looking for doesn't exist or has been removed."
+        action={<LinkButton variant="secondary" to="/projects">Back to Projects</LinkButton>}
+      />
+    );
+  }
+
+  const project = data.project;
+
   return (
-    <div>
-      <PageHeader
+    <>
+      <ProjectSectionHeader
+        eyebrow="Project content"
         title="CMS"
-        description="Structured content collections that power dynamic pages, lists and reusable canvas elements."
-        breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
-          { label: 'CMS' },
-        ]}
+        description="Manage the structured content used throughout this Forge project."
+        projectId={project.id}
+        projectName={project.name}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={refresh} loading={refreshing} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+              Refresh
+            </Button>
+            {canManage && (
+              <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowCreate(true)}>
+                New collection
+              </Button>
+            )}
+          </>
+        }
       />
 
-      {/* Section navigation */}
-      <nav className="flex flex-wrap items-center gap-1 mb-5 border-b border-forge-border-subtle" role="navigation" aria-label="CMS sections">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => { setSection(s.key); setOpenCollectionId(null); }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
-              section === s.key
-                ? 'border-forge-amber text-forge-amber'
-                : 'border-transparent text-forge-text-muted hover:text-forge-text-primary'
-            }`}
-            aria-current={section === s.key ? 'page' : undefined}
-          >
-            {s.icon}
-            {s.label}
-          </button>
-        ))}
-      </nav>
+      <div className="mb-4">
+        <CmsOverview data={data} />
+      </div>
 
-      {section === 'collections' && !openCollection && (
-        <CollectionsSection
-          collections={collections}
-          role={role}
-          loading={loading}
-          error={error}
-          onRetry={refresh}
-          onOpen={(id) => setOpenCollectionId(id)}
-          onCreate={handleCreate}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 items-start">
+        <CmsNavRail
+          collections={data.collections}
+          selectedId={selectedId}
+          canManage={canManage}
+          onSelect={(id) => setSelectedId(id)}
+          onNewCollection={() => setShowCreate(true)}
           onDelete={handleDelete}
         />
-      )}
 
-      {section === 'collections' && openCollection && (
-        <CollectionBuilder
-          collection={openCollection}
-          role={role}
-          onBack={() => setOpenCollectionId(null)}
-          onRefresh={refresh}
-          onDelete={handleDelete}
-        />
-      )}
-
-      {section === 'content' && !contentCollection && (
-        <div className="rounded-lg border border-forge-border-subtle bg-forge-panel">
-          <EmptyState
-            title="Create a collection first"
-            description="Content lives inside collections. Create a collection, then add items here."
-            action={<Button size="sm" onClick={() => setSection('collections')}>Go to Collections</Button>}
-          />
-        </div>
-      )}
-
-      {section === 'content' && contentCollection && (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs text-forge-text-muted">Collection</span>
-            <Select
-              options={collections.map((c) => ({ value: c.id, label: c.name }))}
-              value={contentCollection.id}
-              onChange={(e) => setContentCollectionId(e.target.value)}
-              className="w-56"
+        <div className="min-w-0">
+          {data.collections.length === 0 ? (
+            <div className="rounded-lg border border-forge-border-subtle bg-forge-panel">
+              <EmptyState
+                icon={<Layers className="h-8 w-8" />}
+                title="No content yet"
+                description="Content lives inside collections — blog posts, services, team members, products and more. Create a content type, then add items to it."
+                action={
+                  canManage ? (
+                    <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowCreate(true)}>
+                      New collection
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : selectedCollection && view === 'settings' ? (
+            <CollectionBuilder
+              collection={selectedCollection}
+              role={data.role}
+              onBack={() => setView('content')}
+              onRefresh={refresh}
+              onDelete={handleDelete}
             />
-            <span className="text-xs text-forge-text-muted">{items.length} item{items.length === 1 ? '' : 's'}</span>
-          </div>
-          <ContentSection
-            collection={contentCollection}
-            items={items}
-            role={role}
-            loading={itemsLoading}
-            error={itemsError}
-            onRefresh={refreshItems}
-          />
+          ) : selectedCollection ? (
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CmsIcon name={selectedCollection.icon} className="h-4 w-4 text-forge-amber shrink-0" />
+                  <h2 className="text-sm font-semibold text-forge-text-primary truncate">{selectedCollection.name}</h2>
+                  <span className="text-xs text-forge-text-muted whitespace-nowrap">{items.length} item{items.length === 1 ? '' : 's'}</span>
+                </div>
+                {canManage && (
+                  <Button variant="secondary" size="sm" icon={<Settings className="h-3.5 w-3.5" />} onClick={() => setView('settings')}>
+                    Settings
+                  </Button>
+                )}
+              </div>
+              <ContentSection
+                collection={selectedCollection}
+                items={items}
+                role={data.role}
+                loading={itemsLoading}
+                error={itemsError}
+                onRefresh={refreshItems}
+              />
+            </div>
+          ) : null}
         </div>
-      )}
+      </div>
 
-      {(section === 'dynamic-pages' || section === 'relationships' || section === 'imports' || section === 'exports' || section === 'settings') && (
-        <PlaceholderSection section={section} />
+      {showCreate && (
+        <CreateCollectionModal
+          onClose={() => setShowCreate(false)}
+          onCreate={async (input) => {
+            const res = await handleCreate(input);
+            if (res.ok) setShowCreate(false);
+            return res;
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }

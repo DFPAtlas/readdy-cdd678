@@ -4,11 +4,12 @@ import {
   ChevronDown, Zap, HardDrive, CircleDot, HelpCircle, Settings as SettingsIcon
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
-import { useWorkspaceStore, useProjectStore, useCommandPaletteStore, useSystemStore } from '@/stores/index';
+import { useWorkspaceStore, useProjectStore, useCommandPaletteStore, useSystemStore, useNotificationStore } from '@/stores/index';
 import { StatusDot } from '@/components/ui/StatusChip';
 import { SaveStatus } from '@/components/ui/SaveStatus';
 import { DropdownMenu, DropdownItem, DropdownDivider, DropdownLabel } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { NotificationsPopover } from '@/components/feature/NotificationsPopover';
 import { demoProjects } from '@/services/mock/demoData';
 import { KeyboardShortcut } from '@/components/ui/KeyboardShortcut';
 
@@ -24,6 +25,7 @@ export function TopBar({ compact }: TopBarProps) {
   const activeProject = useProjectStore((s) => s.activeProject);
   const openCommandPalette = useCommandPaletteStore((s) => s.open);
   const health = useSystemStore((s) => s.health);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   const project = projectId ? demoProjects.find((p) => p.id === projectId) : activeProject;
 
@@ -76,12 +78,20 @@ export function TopBar({ compact }: TopBarProps) {
           <CircleDot className="h-2.5 w-2.5" /> Build Ready
         </span>
 
-        <Tooltip content="Notifications">
-          <button className="relative h-7 w-7 flex items-center justify-center rounded text-forge-text-secondary hover:text-forge-text-primary hover:bg-forge-hover transition-colors">
-            <Bell className="h-3.5 w-3.5" />
-            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-forge-amber" />
-          </button>
-        </Tooltip>
+        <NotificationsPopover
+          trigger={
+            <Tooltip content="Notifications">
+              <button className="relative h-7 w-7 flex items-center justify-center rounded text-forge-text-secondary hover:text-forge-text-primary hover:bg-forge-hover transition-colors">
+                <Bell className="h-3.5 w-3.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-forge-amber" />
+                )}
+              </button>
+            </Tooltip>
+          }
+          projectId={projectId}
+          projectName={project?.name}
+        />
 
         <Tooltip content="Help">
           <button className="h-7 w-7 flex items-center justify-center rounded text-forge-text-secondary hover:text-forge-text-primary hover:bg-forge-hover transition-colors">
@@ -180,12 +190,20 @@ export function TopBar({ compact }: TopBarProps) {
       </Tooltip>
 
       {/* Notifications */}
-      <Tooltip content="Notifications">
-        <button className="relative h-7 w-7 flex items-center justify-center rounded text-forge-text-secondary hover:text-forge-text-primary hover:bg-forge-hover transition-colors">
-          <Bell className="h-3.5 w-3.5" />
-          <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-forge-amber" />
-        </button>
-      </Tooltip>
+      <NotificationsPopover
+        trigger={
+          <Tooltip content="Notifications">
+            <button className="relative h-7 w-7 flex items-center justify-center rounded text-forge-text-secondary hover:text-forge-text-primary hover:bg-forge-hover transition-colors">
+              <Bell className="h-3.5 w-3.5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-forge-amber" />
+              )}
+            </button>
+          </Tooltip>
+        }
+        projectId={projectId}
+        projectName={project?.name}
+      />
 
       {/* Activity */}
       <Tooltip content="Activity">

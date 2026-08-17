@@ -25,9 +25,10 @@ export const HERO_CONFIG = {
 
 /** Header navigation for the public hero page */
 export const PUBLIC_NAV_LINKS = [
-  { label: 'Product', href: '#architecture' },
+  { label: 'Product', href: '#features' },
   { label: 'How it works', href: '#how-it-works' },
-  { label: 'Local AI', href: '#trust' },
+  { label: 'AI', href: '#ai-agents' },
+  { label: 'Use cases', href: '#use-cases' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Documentation', href: '/help' },
 ] as const;
@@ -71,12 +72,12 @@ export const ARCHITECTURE_NODES = [
 
 /** Trust strip items */
 export const TRUST_ITEMS = [
-  { label: 'Local-first architecture', icon: 'Shield' },
-  { label: 'Multiple AI providers', icon: 'Cpu' },
+  { label: 'Local-first by design', icon: 'Shield' },
+  { label: 'Your choice of AI providers', icon: 'Cpu' },
   { label: 'Controlled agent tools', icon: 'Settings' },
-  { label: 'Source code ownership', icon: 'FileCode' },
-  { label: 'Version history', icon: 'GitBranch' },
-  { label: 'Standard export formats', icon: 'Package' },
+  { label: 'You own the source code', icon: 'FileCode' },
+  { label: 'Reversible version history', icon: 'GitBranch' },
+  { label: 'Portable export formats', icon: 'Package' },
 ] as const;
 
 /** Loading screen rotating statuses */

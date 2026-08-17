@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Workspace, Project, Notification, SystemService, ServiceHealth, User } from '@/types';
-import { demoWorkspace, demoUser } from '@/services/mock/demoData';
+import { demoWorkspace, demoUser, demoNotifications } from '@/services/mock/demoData';
 
 interface WorkspaceState {
   workspace: Workspace | null;
@@ -42,8 +42,8 @@ interface NotificationState {
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
-  notifications: [],
-  unreadCount: 0,
+  notifications: demoNotifications,
+  unreadCount: demoNotifications.filter((n) => !n.isRead).length,
 
   addNotification: (n) =>
     set((s) => ({

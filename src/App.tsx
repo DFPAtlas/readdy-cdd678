@@ -7,6 +7,8 @@ import { CommandPalette } from "@/components/feature/CommandPalette";
 import { ErrorBoundary } from "@/components/feature/ErrorBoundary";
 import { OfflineBanner } from "@/components/feature/OfflineBanner";
 import { LoadingScreen } from "@/components/feature/LoadingScreen";
+import { ScrollToTop } from "@/components/feature/ScrollToTop";
+import AuthBootstrap from "@/components/feature/AuthBootstrap";
 import { useThemeStore, applyThemeToDocument } from "@/stores/themeStore";
 import { useState, useEffect } from "react";
 
@@ -49,10 +51,12 @@ function App() {
       <I18nextProvider i18n={i18n}>
         <BrowserRouter basename={__BASE_PATH__}>
           <ThemeInitializer />
+          <ScrollToTop />
           <ToastProvider>
             <OfflineBanner />
             <CommandPalette />
             <AppRoutes />
+            <AuthBootstrap />
           </ToastProvider>
           <LoadingScreen visible={loadingVisible} />
         </BrowserRouter>

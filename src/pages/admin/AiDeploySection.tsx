@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, type AiOverview, type DeploymentRow } from './forgeAdmin';
 import { useAdmin, hasPermission } from './AdminGuard';
-import { StatusPill, LoadingState, ErrorState, EmptyState, SectionTitle } from './components';
+import { StatusPill, LoadingState, ErrorState, EmptyState, SectionTitle, StatCard, formatDate } from './components';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
@@ -51,14 +51,19 @@ function AiOps({ canOperate }: { canOperate: boolean }) {
   if (!data) return <EmptyState message="No AI registry data." />;
 
   const flagOn = (key: string) => data.flags.find((f) => f.flag_key === key)?.enabled ?? false;
+  const u = data.usage;
+  const fmtCost = (micros: number) => `$${(micros / 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatCard label="Queue depth" value={data.queueDepth} icon="ri-stack-line" tone="amber" />
+        <StatCard label="Requests (30d)" value={u.totalRequests.toLocaleString()} icon="ri-send-plane-line" tone="muted" />
+        <StatCard label="Failures (30d)" value={u.totalFailures.toLocaleString()} icon="ri-error-warning-line" tone={u.totalFailures > 0 ? 'warning' : 'muted'} />
+        <StatCard label="Tokens (30d)" value={u.totalTokens.toLocaleString()} icon="ri-flashlight-line" tone="accent" />
+      </div>
+
       <div className="flex flex-wrap gap-2 mb-5">
-        <Card className="flex items-center gap-3">
-          <span className="text-xs text-forge-text-secondary">Queue depth</span>
-          <span className="text-sm font-semibold text-forge-text-primary">{data.queueDepth}</span>
-        </Card>
         {canOperate && (
           <Button size="sm" variant={flagOn('ai_paused') ? 'danger' : 'secondary'} onClick={() => act(() => adminApi.aiToggleFlag('ai_paused', !flagOn('ai_paused')))}>
             <i className="ri-pause-circle-line" /> {flagOn('ai_paused') ? 'AI paused — resume' : 'Pause AI'}
@@ -72,27 +77,46 @@ function AiOps({ canOperate }: { canOperate: boolean }) {
         {feedback && <span className="text-xs text-forge-success self-center">{feedback}</span>}
       </div>
 
+      <Card className="mb-5">
+        <h3 className="text-sm font-semibold text-forge-text-primary mb-2">AI cost</h3>
+        {u.hasCostData ? (
+          <p className="text-sm text-forge-text-secondary">Estimated platform spend (30d): <span className="font-medium text-forge-text-primary">{fmtCost(u.totalCostMicros)}</span> <span className="text-forge-text-muted">— provider-reported estimate</span></p>
+        ) : (
+          <p className="text-sm text-forge-text-muted">Per-request cost is not currently reported by the AI pipeline, so no spend figure is displayed.</p>
+        )}
+      </Card>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-sm font-semibold text-forge-text-primary mb-3">Providers</h3>
           {data.providers.length === 0 ? <p className="text-sm text-forge-text-muted">No providers configured.</p> : (
             <div className="space-y-1.5">
-              {data.providers.map((p) => (
-                <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-forge-border-subtle last:border-0">
-                  <div>
-                    <p className="text-sm text-forge-text-primary">{String(p.display_name ?? p.provider_key ?? '—')}</p>
-                    <p className="text-[10px] text-forge-text-muted">{String(p.provider_key ?? '')}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusPill status={String(p.status ?? 'unknown')} />
-                    {canOperate && (
-                      <Button size="sm" variant="ghost" onClick={() => act(() => adminApi.aiSetProvider(p.id, p.status === 'disabled' ? 'active' : 'disabled'))}>
-                        {p.status === 'disabled' ? 'Enable' : 'Disable'}
-                      </Button>
+              {data.providers.map((p) => {
+                const pu = u.byProvider[String(p.provider_key)] ?? null;
+                return (
+                  <div key={p.id} className="py-1.5 border-b border-forge-border-subtle last:border-0">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-forge-text-primary">{String(p.display_name ?? p.provider_key ?? '—')}</p>
+                        <p className="text-[10px] text-forge-text-muted">{String(p.provider_key ?? '')}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusPill status={String(p.status ?? 'unknown')} />
+                        {canOperate && (
+                          <Button size="sm" variant="ghost" onClick={() => act(() => adminApi.aiSetProvider(p.id, p.status === 'disabled' ? 'active' : 'disabled'))}>
+                            {p.status === 'disabled' ? 'Enable' : 'Disable'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {pu && (
+                      <p className="text-[10px] text-forge-text-muted mt-0.5">
+                        {pu.requests.toLocaleString()} requests · {pu.failures} failed · {pu.tokens.toLocaleString()} tokens
+                      </p>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
@@ -121,6 +145,28 @@ function AiOps({ canOperate }: { canOperate: boolean }) {
           )}
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <h3 className="text-sm font-semibold text-forge-text-primary mb-3">Recent AI failures</h3>
+        {data.failures.length === 0 ? (
+          <p className="text-sm text-forge-text-muted">No AI failures recorded in the monitored window.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {data.failures.map((f, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 py-1.5 border-b border-forge-border-subtle last:border-0">
+                <div className="min-w-0">
+                  <p className="text-sm text-forge-text-primary">
+                    {f.provider ?? 'job'} <span className="text-forge-text-muted">·</span> {f.model ?? f.taskClass ?? '—'}
+                  </p>
+                  <p className="text-[10px] text-forge-text-muted truncate max-w-[420px]" title={f.errorCode ?? ''}>{f.errorCode ?? 'Failed'}</p>
+                </div>
+                <span className="text-xs text-forge-text-muted whitespace-nowrap">{formatDate(f.at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-forge-text-muted mt-3">Error summaries are sanitized — raw prompts and provider responses are never surfaced.</p>
+      </Card>
     </div>
   );
 }

@@ -17,7 +17,10 @@ export function WorkflowSteps() {
   return (
     <div className="max-w-6xl mx-auto px-5 md:px-6">
       <div className="text-center mb-12 md:mb-16">
-        <h2 className="text-2xl md:text-3xl font-bold text-forge-text-primary mb-3">
+        <span className="inline-block text-xs font-semibold uppercase tracking-[0.2em] text-forge-amber mb-4">
+          A Guided Workflow
+        </span>
+        <h2 className="text-2xl md:text-4xl font-bold text-forge-text-primary tracking-tight mb-3">
           How Forge works
         </h2>
         <p className="text-forge-text-secondary max-w-lg mx-auto">

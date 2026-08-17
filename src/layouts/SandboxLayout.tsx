@@ -45,6 +45,17 @@ export default function SandboxLayout({
           : 'h-screen'
       }`}
     >
+      {embedded && (
+        <div className="flex items-center h-7 px-3 border-b border-forge-border-subtle bg-forge-panel flex-shrink-0">
+          <span className="inline-flex items-center gap-2 text-[11px] font-medium tracking-wide text-forge-text-muted">
+            <span className="w-1.5 h-1.5 rounded-full bg-forge-amber" aria-hidden="true" />
+            WORKSPACE PREVIEW
+          </span>
+          <span className="ml-3 text-[11px] text-forge-text-muted/70 hidden sm:inline">
+            Interactive demonstration of the Forge interface
+          </span>
+        </div>
+      )}
       {!embedded && <TopBar compact />}
 
       {/* Project Toolbar */}

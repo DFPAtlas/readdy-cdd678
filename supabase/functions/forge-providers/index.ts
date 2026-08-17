@@ -5,6 +5,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
    Forge Providers — BYOK, connection tests, admin, n8n webhooks.
    Provider secrets are encrypted (AES-GCM) before storage and the
    full key is never returned to a client.
+
+   Authorization: platform-admin authority resolves from `platform_admins`
+   (single trusted source), permission-scoped to ai.operate.
    ────────────────────────────────────────────────────────────── */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -93,14 +96,24 @@ async function testConnection(providerKey: string, apiKey: string, url?: string)
   }
 }
 
-/* ─── Ownership resolution ─── */
+/* ─── Platform-admin authority (single source: platform_admins) ─── */
+
+async function hasAiOperate(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data } = await admin.from('platform_admins').select('role, permissions, active').eq('user_id', userId).maybeSingle();
+  if (!data?.active) return false;
+  if (data.role === 'super_admin') return true;
+  if (data.role === 'operations_admin') return true;
+  const stored: string[] = Array.isArray(data.permissions) ? data.permissions.filter((p: unknown) => typeof p === 'string') : [];
+  return stored.includes('*') || stored.includes('ai.operate');
+}
+
+/* ─── Ownership resolution (workspace owner OR AI-operate platform admin) ─── */
 
 async function resolveWorkspace(admin: ReturnType<typeof createClient>, userId: string, workspaceId: string): Promise<boolean> {
   if (workspaceId) {
     const { data: ws } = await admin.from('workspaces').select('owner_id').eq('id', workspaceId).maybeSingle();
     if (ws && ws.owner_id === userId) return true;
-    const { data: adminProfile } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
-    if (adminProfile?.role === 'admin') return true;
+    if (await hasAiOperate(admin, userId)) return true;
   }
   return false;
 }
@@ -134,8 +147,7 @@ serve(async (req) => {
   const environment = typeof body.environment === 'string' ? body.environment : 'production';
 
   const isOwner = await resolveWorkspace(admin, userId, workspaceId);
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = await hasAiOperate(admin, userId);
 
   switch (action) {
     case 'registry': {

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 import {
-  Undo2, Redo2, Play, Save, CheckCircle2, XCircle, LayoutGrid, Power, Pause,
+  Undo2, Redo2, Save, CheckCircle2, XCircle, LayoutGrid, Power, Pause, Info,
 } from 'lucide-react';
 import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowDefinition, WorkflowConnection, ValidationStatus } from '../workflowTypes';
 import { WORKFLOW_STATUSES, emptyDefinition } from '../workflowTypes';
@@ -49,8 +49,6 @@ function nextEdgeId() {
   return `e${Date.now().toString(36)}_${edgeSeq}`;
 }
 
-type TestResult = { id: string; label: string; status: 'success' };
-
 function reachableNodes(def: WorkflowDefinition): WorkflowNode[] {
   const trigger = def.nodes.find((n) => n.category === 'trigger') ?? def.nodes[0];
   if (!trigger) return [];
@@ -91,7 +89,6 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: () => void } | null>(null);
-  const [testResult, setTestResult] = useState<TestResult[] | null>(null);
 
   const past = useRef<WorkflowDefinition[]>([]);
   const future = useRef<WorkflowDefinition[]>([]);
@@ -247,7 +244,7 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
     commit({ ...definition, nodes });
   };
 
-  /* ── Save / activate / test ── */
+  /* ── Save / activate ── */
 
   const handleSave = async () => {
     const errs = validateDefinition(definition);
@@ -276,15 +273,6 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
     if (res.ok) await onRefresh();
   };
 
-  const handleTest = () => {
-    const errs = validateDefinition(definition);
-    setErrors(errs);
-    if (errs.length > 0) { setMessage('Fix validation errors before testing.'); setTestResult(null); return; }
-    const order = reachableNodes(definition);
-    setTestResult(order.map((n) => ({ id: n.id, label: n.label, status: 'success' })));
-    setMessage('Test run complete (dry run — no side effects).');
-  };
-
   const selected = definition.nodes.find((n) => n.id === selectedId) ?? null;
   const statusLabel = WORKFLOW_STATUSES.find((s) => s.value === workflow.status)?.label ?? workflow.status;
 
@@ -309,7 +297,6 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
         <Button variant="ghost" size="sm" icon={<Undo2 className="h-3.5 w-3.5" />} onClick={undo} disabled={past.current.length === 0}>Undo</Button>
         <Button variant="ghost" size="sm" icon={<Redo2 className="h-3.5 w-3.5" />} onClick={redo} disabled={future.current.length === 0}>Redo</Button>
         <Button variant="secondary" size="sm" icon={<LayoutGrid className="h-3.5 w-3.5" />} onClick={autoLayout} disabled={!canEdit}>Auto-layout</Button>
-        <Button variant="secondary" size="sm" icon={<Play className="h-3.5 w-3.5" />} onClick={handleTest}>Test</Button>
         <Button variant="secondary" size="sm" icon={<Save className="h-3.5 w-3.5" />} onClick={handleSave} loading={saving} disabled={!canEdit}>Save</Button>
         {canAdmin && (
           workflow.status === 'active'
@@ -409,25 +396,11 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
         {!message && <span>Drag nodes to move · scroll to zoom · drag background to pan · click ports to connect.</span>}
       </div>
 
-      {/* Test run panel */}
-      {testResult && (
-        <div className="border-t border-forge-border-subtle bg-forge-bg px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="warning">TEST</Badge>
-            <span className="text-xs text-forge-text-muted">Dry run — no emails sent, no data changed, no credits consumed.</span>
-          </div>
-          <div className="space-y-1">
-            {testResult.map((r, i) => (
-              <div key={r.id} className="flex items-center gap-2 text-xs">
-                <span className="text-forge-text-muted w-5 text-right">{i + 1}.</span>
-                <CheckCircle2 className="h-3.5 w-3.5 text-forge-success" />
-                <span className="text-forge-text-primary">{r.label}</span>
-                <span className="text-forge-text-muted">— succeeded (simulated)</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Execution engine note */}
+      <div className="px-3 py-2 border-t border-forge-border-subtle bg-forge-bg flex items-start gap-2 text-xs text-forge-text-muted">
+        <Info className="h-3.5 w-3.5 text-forge-amber shrink-0 mt-0.5" />
+        <span>This editor saves your workflow configuration, but the execution engine is not active yet — saved workflows do not run automatically. There is no manual “run now” until the engine is wired up.</span>
+      </div>
 
       <ConfirmationModal
         open={Boolean(confirm)}

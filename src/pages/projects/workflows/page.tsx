@@ -1,88 +1,175 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  Workflow, Play, Pencil, Pause, XCircle, LayoutTemplate, Plug, History, Settings,
-} from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import type { Workflow as WorkflowType, WorkflowStatus, WorkflowTemplate } from './workflowTypes';
-import { listWorkflows, createWorkflow, saveVersion, currentProjectRole } from './workflowData';
+import { useProjectWorkflows } from '@/hooks/useProjectWorkflows';
+import { canManageWorkflows } from '@/services/projectWorkflowsService';
+import type { WorkflowSummary } from '@/services/projectWorkflowsService';
+import type { Workflow } from './workflowTypes';
+import { createWorkflow, saveVersion } from './workflowData';
+import { ProjectSectionHeader } from '@/pages/projects/components/ProjectSectionHeader';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/pages/dashboard/components/LinkButton';
+import { WorkflowsOverview } from './components/WorkflowsOverview';
 import { WorkflowsListSection } from './components/WorkflowsListSection';
 import { WorkflowBuilder } from './components/WorkflowBuilder';
 import { RunHistorySection } from './components/RunHistorySection';
-import { ConnectionsSection } from './components/ConnectionsSection';
 import { TemplatesSection } from './components/TemplatesSection';
-import { WorkflowPlaceholder } from './components/WorkflowPlaceholder';
+import { ConnectionsSection } from './components/ConnectionsSection';
+import { CreateWorkflowModal } from './components/CreateWorkflowModal';
+import {
+  RefreshCw, Plus, Workflow as WorkflowIcon, History, LayoutTemplate, Plug, Lock, AlertTriangle,
+} from 'lucide-react';
 
-type SectionKey = 'all' | 'active' | 'draft' | 'paused' | 'failed' | 'templates' | 'connections' | 'runs' | 'settings';
+type SectionKey = 'workflows' | 'runs' | 'templates' | 'connections';
 
-const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode; filter: WorkflowStatus | null }[] = [
-  { key: 'all', label: 'All workflows', icon: <Workflow className="h-3.5 w-3.5" />, filter: null },
-  { key: 'active', label: 'Active', icon: <Play className="h-3.5 w-3.5" />, filter: 'active' },
-  { key: 'draft', label: 'Draft', icon: <Pencil className="h-3.5 w-3.5" />, filter: 'draft' },
-  { key: 'paused', label: 'Paused', icon: <Pause className="h-3.5 w-3.5" />, filter: 'paused' },
-  { key: 'failed', label: 'Failed', icon: <XCircle className="h-3.5 w-3.5" />, filter: 'failed' },
-  { key: 'templates', label: 'Templates', icon: <LayoutTemplate className="h-3.5 w-3.5" />, filter: null },
-  { key: 'connections', label: 'Connections', icon: <Plug className="h-3.5 w-3.5" />, filter: null },
-  { key: 'runs', label: 'Run history', icon: <History className="h-3.5 w-3.5" />, filter: null },
-  { key: 'settings', label: 'Settings', icon: <Settings className="h-3.5 w-3.5" />, filter: null },
+const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'workflows', label: 'Workflows', icon: <WorkflowIcon className="h-3.5 w-3.5" /> },
+  { key: 'runs', label: 'Run history', icon: <History className="h-3.5 w-3.5" /> },
+  { key: 'templates', label: 'Templates', icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+  { key: 'connections', label: 'Connections', icon: <Plug className="h-3.5 w-3.5" /> },
 ];
+
+function WorkflowsSkeleton() {
+  return (
+    <div>
+      <div className="mb-6">
+        <Skeleton className="h-3 w-40 mb-3" />
+        <Skeleton className="h-6 w-48 mb-2" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+      <Skeleton className="h-8 w-64 mb-4" />
+      <Skeleton className="h-32" />
+    </div>
+  );
+}
+
+function toWorkflow(summary: WorkflowSummary, projectId: string): Workflow {
+  return {
+    id: summary.id,
+    projectId,
+    name: summary.name,
+    description: summary.description,
+    status: summary.status,
+    currentVersionId: null,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+  };
+}
 
 export default function WorkflowsPage() {
   const { projectId } = useParams();
-  const [section, setSection] = useState<SectionKey>('all');
-  const [workflows, setWorkflows] = useState<WorkflowType[]>([]);
-  const [role, setRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { data, loading, error, retry, refresh, refreshing } = useProjectWorkflows(projectId);
+
+  const [section, setSection] = useState<SectionKey>('workflows');
   const [openWorkflowId, setOpenWorkflowId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError('');
-    const [list, r] = await Promise.all([listWorkflows(projectId), currentProjectRole(projectId)]);
-    setWorkflows(list);
-    setRole(r);
-    setLoading(false);
-  }, [projectId]);
+  const handleCreate = useCallback(
+    async (name: string, description: string) => {
+      if (!projectId) return false;
+      const res = await createWorkflow(projectId, { name, description });
+      if (res.ok) await refresh();
+      return res.ok;
+    },
+    [projectId, refresh],
+  );
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  if (loading) return <WorkflowsSkeleton />;
 
-  const current = SECTIONS.find((s) => s.key === section)!;
-  const filtered = current.filter ? workflows.filter((w) => w.status === current.filter) : workflows;
-  const openWorkflow = workflows.find((w) => w.id === openWorkflowId) ?? null;
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load project workflows"
+        message="Something went wrong while loading this project's workflows. Please try again."
+        onRetry={retry}
+      />
+    );
+  }
 
-  const handleUseTemplate = async (t: WorkflowTemplate) => {
-    if (!projectId) return;
-    const res = await createWorkflow(projectId, { name: t.name, description: t.description });
-    if (res.ok && res.workflow) {
-      await saveVersion(res.workflow.id, t.definition, 'unvalidated');
-    }
-    await refresh();
-    setSection('all');
-  };
+  if (!data.authenticated) {
+    return (
+      <EmptyState
+        icon={<Lock className="h-8 w-8" />}
+        title="Sign in to view this project"
+        description="You need to be signed in to manage your Forge project workflows."
+        action={
+          <LinkButton variant="secondary" to="/login">
+            Sign in
+          </LinkButton>
+        }
+      />
+    );
+  }
+
+  if (!data.found || !data.project) {
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-8 w-8" />}
+        title="Project not found"
+        description="The project you're looking for doesn't exist or has been removed."
+        action={
+          <LinkButton variant="secondary" to="/projects">
+            Back to Projects
+          </LinkButton>
+        }
+      />
+    );
+  }
+
+  const project = data.project;
+  const canManage = canManageWorkflows(data.currentUserRole);
+  const openSummary = data.workflows.find((w) => w.id === openWorkflowId) ?? null;
 
   return (
-    <div>
-      <PageHeader
+    <>
+      <ProjectSectionHeader
+        eyebrow="Automation"
         title="Workflows"
-        description="Visual automations that connect site events to controlled actions — no code, no exposed secrets."
-        breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
-          { label: 'Workflows' },
-        ]}
+        description="Connect repeatable project actions into visible workflows and track what happens when they run."
+        projectId={project.id}
+        projectName={project.name}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={refresh}
+              loading={refreshing}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+            >
+              Refresh
+            </Button>
+            {canManage && (
+              <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateOpen(true)}>
+                New workflow
+              </Button>
+            )}
+          </>
+        }
       />
 
-      {openWorkflow ? (
+      {openSummary ? (
         <WorkflowBuilder
-          projectId={projectId ?? ''}
-          workflow={openWorkflow}
-          role={role}
-          onBack={() => { setOpenWorkflowId(null); void refresh(); }}
+          projectId={project.id}
+          workflow={toWorkflow(openSummary, project.id)}
+          role={data.currentUserRole}
+          onBack={() => {
+            setOpenWorkflowId(null);
+            void refresh();
+          }}
           onRefresh={refresh}
         />
       ) : (
         <>
+          <WorkflowsOverview counts={data.counts} runCount={data.runCount} />
+
           <nav className="flex flex-wrap items-center gap-1 mb-5 border-b border-forge-border-subtle" role="navigation" aria-label="Workflow sections">
             {SECTIONS.map((s) => (
               <button
@@ -101,24 +188,38 @@ export default function WorkflowsPage() {
             ))}
           </nav>
 
-          {(section === 'all' || section === 'active' || section === 'draft' || section === 'paused' || section === 'failed') && (
+          {section === 'workflows' && (
             <WorkflowsListSection
-              projectId={projectId ?? ''}
-              workflows={filtered}
-              role={role}
-              loading={loading}
-              error={error}
+              projectId={project.id}
+              workflows={data.workflows}
+              role={data.currentUserRole}
+              onCreateRequest={() => setCreateOpen(true)}
               onRefresh={refresh}
               onOpen={(w) => setOpenWorkflowId(w.id)}
             />
           )}
 
-          {section === 'templates' && <TemplatesSection onUse={handleUseTemplate} />}
-          {section === 'connections' && <ConnectionsSection projectId={projectId ?? ''} role={role} onRefresh={refresh} />}
-          {section === 'runs' && <RunHistorySection projectId={projectId ?? ''} />}
-          {section === 'settings' && <WorkflowPlaceholder section="settings" />}
+          {section === 'runs' && <RunHistorySection projectId={project.id} />}
+          {section === 'templates' && (
+            <TemplatesSection
+              onUse={async (t) => {
+                const res = await createWorkflow(project.id, { name: t.name, description: t.description });
+                if (res.ok && res.workflow) {
+                  await saveVersion(res.workflow.id, t.definition, 'unvalidated');
+                }
+                await refresh();
+              }}
+            />
+          )}
+          {section === 'connections' && <ConnectionsSection projectId={project.id} role={data.currentUserRole} onRefresh={refresh} />}
         </>
       )}
-    </div>
+
+      <CreateWorkflowModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

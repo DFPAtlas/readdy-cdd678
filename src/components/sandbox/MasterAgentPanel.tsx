@@ -20,6 +20,9 @@ const AGENT_TABS = [
 
 export function MasterAgentPanel() {
   const { rightPanelOpen, toggleRightPanel, activeAgentTab, setActiveAgentTab } = useSandboxStore();
+  const toast = useToast();
+
+  const previewToast = () => toast.show('Preview mode — this homepage workspace demonstrates the Forge interface', 'info');
 
   return (
     <div className="relative h-full"
@@ -48,7 +51,7 @@ export function MasterAgentPanel() {
           <div className="flex-1"
           >
             <h3 className="text-[15px] font-semibold text-forge-text-primary m-0">Master Agent</h3>
-            <span className="text-[11px] text-forge-success">Context: Online</span>
+            <span className="text-[11px] text-forge-text-muted">Workspace preview</span>
           </div>
           <button
             onClick={toggleRightPanel}
@@ -61,15 +64,24 @@ export function MasterAgentPanel() {
         {/* Controls */}
         <div className="grid grid-cols-3 gap-2 px-2.5 py-2.5 border-b border-forge-border-subtle bg-[rgba(6,12,25,0.96)]"
         >
-          <button className="min-h-[38px] px-2 rounded-lg border border-forge-border-subtle bg-[rgba(11,19,38,0.9)] text-white text-[11px] hover:border-forge-amber/50 transition-colors cursor-pointer whitespace-nowrap"
+          <button
+            onClick={previewToast}
+            title="Workspace preview"
+            className="min-h-[38px] px-2 rounded-lg border border-forge-border-subtle bg-[rgba(11,19,38,0.9)] text-white text-[11px] hover:border-forge-amber/50 transition-colors cursor-pointer whitespace-nowrap"
           >
             Draft
           </button>
-          <button className="min-h-[38px] px-2 rounded-lg border border-forge-amber/40 bg-forge-amber/15 text-white text-[11px] hover:border-forge-amber/60 transition-colors cursor-pointer whitespace-nowrap"
+          <button
+            onClick={previewToast}
+            title="Workspace preview"
+            className="min-h-[38px] px-2 rounded-lg border border-forge-amber/40 bg-forge-amber/15 text-white text-[11px] hover:border-forge-amber/60 transition-colors cursor-pointer whitespace-nowrap"
           >
             Build
           </button>
-          <button className="min-h-[38px] px-2 rounded-lg border border-forge-border-subtle bg-[rgba(11,19,38,0.9)] text-white text-[11px] hover:border-forge-amber/50 transition-colors cursor-pointer whitespace-nowrap"
+          <button
+            onClick={previewToast}
+            title="Workspace preview"
+            className="min-h-[38px] px-2 rounded-lg border border-forge-border-subtle bg-[rgba(11,19,38,0.9)] text-white text-[11px] hover:border-forge-amber/50 transition-colors cursor-pointer whitespace-nowrap"
           >
             Deploy
           </button>
@@ -120,7 +132,7 @@ function ChatTab() {
 
   const handleSend = () => {
     if (!input.trim()) return;
-    toast.show('Message sent (demo)');
+    toast.show('Preview mode — this homepage workspace demonstrates the Forge interface', 'info');
     setInput('');
   };
 
@@ -258,11 +270,9 @@ function ActionBtn({ icon: Icon }: { icon: typeof ThumbsUp }) {
 
 function PromptTab() {
   const toast = useToast();
-  const { setBuildStatus } = useSandboxStore();
 
   const handleSubmit = () => {
-    setBuildStatus('running');
-    toast.show('Build prompt submitted from Prompt tab', 'success');
+    toast.show('Preview mode — this homepage workspace demonstrates the Forge interface', 'info');
   };
 
   return (

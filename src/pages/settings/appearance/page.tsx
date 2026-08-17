@@ -1,109 +1,92 @@
-import { useState } from 'react';
+import { useThemeStore } from '@/stores/themeStore';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { useThemeStore } from '@/stores/index';
-import { Palette, Monitor, Moon, Sun, Type } from 'lucide-react';
+import { Monitor, Moon, Sun } from 'lucide-react';
+
+type ThemeOption = 'dark' | 'light' | 'system';
+
+function ThemePreview({ variant }: { variant: ThemeOption }) {
+  if (variant === 'system') {
+    return (
+      <div className="h-16 rounded-md overflow-hidden border border-forge-border grid grid-cols-2" aria-hidden="true">
+        <div className="bg-forge-bg" />
+        <div className="bg-white" />
+      </div>
+    );
+  }
+
+  const light = variant === 'light';
+  return (
+    <div
+      className={`h-16 rounded-md overflow-hidden border p-2 ${
+        light ? 'bg-gray-50 border-gray-200' : 'bg-forge-bg border-forge-border'
+      }`}
+      aria-hidden="true"
+    >
+      <div className="flex items-center gap-1 mb-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${light ? 'bg-gray-300' : 'bg-forge-border'}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${light ? 'bg-gray-300' : 'bg-forge-border'}`} />
+        <span className="h-1.5 w-1.5 rounded-full bg-forge-amber" />
+      </div>
+      <div className={`h-2 w-3/4 rounded mb-1 ${light ? 'bg-gray-200' : 'bg-forge-panel'}`} />
+      <div className={`h-2 w-1/2 rounded ${light ? 'bg-gray-100' : 'bg-forge-border'}`} />
+    </div>
+  );
+}
+
+const OPTIONS: { value: ThemeOption; label: string; description: string; icon: typeof Moon }[] = [
+  { value: 'dark', label: 'Dark', description: 'Low-light developer theme', icon: Moon },
+  { value: 'light', label: 'Light', description: 'Bright, high-contrast theme', icon: Sun },
+  { value: 'system', label: 'System', description: 'Follow your OS preference', icon: Monitor },
+];
 
 export default function SettingsAppearancePage() {
-  const { mode, setMode } = useThemeStore();
-  const [density, setDensity] = useState('comfortable');
-  const [codeFont, setCodeFont] = useState('JetBrains Mono');
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const [sidebarDefault, setSidebarDefault] = useState('expanded');
-  const [saved, setSaved] = useState(true);
-
-  const handleSetMode = (m: 'dark' | 'light' | 'system') => {
-    setMode(m);
-    setSaved(false);
-  };
+  const { theme, setTheme } = useThemeStore();
 
   return (
-    <div className="max-w-lg space-y-4">
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-foreground-950 mb-3">Theme</h3>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { value: 'dark' as const, label: 'Dark', icon: <Moon className="h-4 w-4" /> },
-            { value: 'light' as const, label: 'Light', icon: <Sun className="h-4 w-4" /> },
-            { value: 'system' as const, label: 'System', icon: <Monitor className="h-4 w-4" /> },
-          ].map((opt) => (
+    <div className="max-w-xl space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-forge-text-primary">Appearance</h2>
+        <p className="text-sm text-forge-text-muted mt-0.5">
+          Choose how Forge looks. Changes apply immediately and are remembered for next time.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" role="radiogroup" aria-label="Theme">
+        {OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          const active = theme === opt.value;
+          return (
             <button
               key={opt.value}
-              onClick={() => handleSetMode(opt.value)}
-              className={`p-3 rounded-lg border-2 text-center transition-colors ${
-                mode === opt.value ? 'border-amber-500 bg-amber-500/5' : 'border-background-200 hover:border-background-300'
+              role="radio"
+              aria-checked={active}
+              onClick={() => setTheme(opt.value)}
+              className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                active
+                  ? 'border-forge-amber bg-forge-amber/5'
+                  : 'border-forge-border hover:border-forge-border'
               }`}
             >
-              <div className="flex justify-center mb-1">{opt.icon}</div>
-              <p className="text-xs font-medium text-foreground-950">{opt.label}</p>
+              <div className="flex items-center justify-between mb-2">
+                <Icon className={`h-4 w-4 ${active ? 'text-forge-amber' : 'text-forge-text-muted'}`} />
+                {active && <span className="h-2 w-2 rounded-full bg-forge-amber" />}
+              </div>
+              <p className="text-sm font-medium text-forge-text-primary">{opt.label}</p>
+              <p className="text-xs text-forge-text-muted mt-0.5">{opt.description}</p>
+              <div className="mt-3">
+                <ThemePreview variant={opt.value} />
+              </div>
             </button>
-          ))}
-        </div>
-      </Card>
+          );
+        })}
+      </div>
 
       <Card className="p-4">
-        <h3 className="text-sm font-semibold text-foreground-950 mb-3">Density</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {['compact', 'comfortable'].map((d) => (
-            <button
-              key={d}
-              onClick={() => { setDensity(d); setSaved(false); }}
-              className={`p-3 rounded-lg border-2 text-left transition-colors capitalize ${
-                density === d ? 'border-amber-500 bg-amber-500/5' : 'border-background-200 hover:border-background-300'
-              }`}
-            >
-              <p className="text-xs font-medium text-foreground-950">{d}</p>
-            </button>
-          ))}
-        </div>
+        <p className="text-xs text-forge-text-muted leading-relaxed">
+          Theme preference is stored on this device only. The System option reads your operating system's
+          light/dark setting automatically.
+        </p>
       </Card>
-
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-foreground-950 mb-3">Code Font</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro'].map((f) => (
-            <button
-              key={f}
-              onClick={() => { setCodeFont(f); setSaved(false); }}
-              className={`p-3 rounded-lg border-2 text-left transition-colors ${
-                codeFont === f ? 'border-amber-500 bg-amber-500/5' : 'border-background-200 hover:border-background-300'
-              }`}
-            >
-              <Type className="h-4 w-4 text-foreground-500 mb-1" />
-              <p className="text-xs font-mono font-medium text-foreground-950">{f}</p>
-            </button>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-foreground-950 mb-3">Accessibility</h3>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={reducedMotion} onChange={(e) => { setReducedMotion(e.target.checked); setSaved(false); }} className="h-4 w-4 rounded border-background-300 text-amber-500 focus:ring-amber-500" />
-            <span className="text-xs text-foreground-600">Reduced motion</span>
-          </label>
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-foreground-950 mb-3">Sidebar Default</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {['expanded', 'collapsed'].map((s) => (
-            <button
-              key={s}
-              onClick={() => { setSidebarDefault(s); setSaved(false); }}
-              className={`p-3 rounded-lg border-2 text-left transition-colors capitalize ${
-                sidebarDefault === s ? 'border-amber-500 bg-amber-500/5' : 'border-background-200 hover:border-background-300'
-              }`}
-            >
-              <p className="text-xs font-medium text-foreground-950">{s}</p>
-            </button>
-          ))}
-        </div>
-      </Card>
-
-      <Button size="sm" onClick={() => setSaved(true)} disabled={saved}>{saved ? 'Saved' : 'Save Preferences'}</Button>
     </div>
   );
 }

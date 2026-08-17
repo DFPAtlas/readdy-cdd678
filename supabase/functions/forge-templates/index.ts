@@ -7,6 +7,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
    (destination-project edit permission) and performed by the
    editor with a recovery checkpoint. This function only handles
    actions that must be server-authorised.
+
+   Authorization: platform-admin authority resolves from `platform_admins`
+   (single trusted source), permission-scoped to templates.moderate.
    ────────────────────────────────────────────────────────────── */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -48,9 +51,15 @@ async function getUser(authHeader: string | null) {
   return data.user.id;
 }
 
-async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
-  const { data } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
-  return (data?.role) === 'forge_admin';
+/* Single trusted source of platform-admin authority: `platform_admins`.
+   Owner (super_admin) and template_moderator hold templates.moderate. */
+async function canModerate(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data } = await admin.from('platform_admins').select('role, permissions, active').eq('user_id', userId).maybeSingle();
+  if (!data?.active) return false;
+  if (data.role === 'super_admin') return true;
+  if (data.role === 'template_moderator') return true;
+  const stored: string[] = Array.isArray(data.permissions) ? data.permissions.filter((p: unknown) => typeof p === 'string') : [];
+  return stored.includes('*') || stored.includes('templates.moderate');
 }
 
 serve(async (req) => {
@@ -71,7 +80,7 @@ serve(async (req) => {
 
   /* ── Identity / admin check ── */
   if (action === 'whoami') {
-    const adminFlag = await isAdmin(admin, userId);
+    const adminFlag = await canModerate(admin, userId);
     return json({ requestId, code: 'OK', isAdmin: adminFlag }, 200, cors);
   }
 
@@ -125,7 +134,7 @@ serve(async (req) => {
 
   /* ── Moderation (admin-only, requires reason) ── */
   if (action === 'moderate') {
-    const adminFlag = await isAdmin(admin, userId);
+    const adminFlag = await canModerate(admin, userId);
     if (!adminFlag) return error(requestId, 'FORBIDDEN', 'Moderation requires admin access', 403);
 
     const templateId = typeof body.templateId === 'string' ? body.templateId : '';
@@ -147,7 +156,6 @@ serve(async (req) => {
       .eq('id', templateId);
     if (updateError) return error(requestId, 'UPDATE_FAILED', 'Could not update template', 500);
 
-    // Close any open review as decided, and append a fresh decision record.
     const reviewStatus = decision === 'approve' ? 'approved'
       : decision === 'changes_requested' ? 'changes_requested'
       : decision === 'reject' ? 'rejected' : 'suspended';
@@ -161,7 +169,6 @@ serve(async (req) => {
       completed_at: now,
     });
 
-    // Audit event (append-only).
     await admin.from('collaboration_events').insert({
       project_id: null,
       actor_id: userId,

@@ -5,6 +5,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
    Forge Billing — server-controlled plan catalogue, usage summary,
    credit estimates, limit checks and audited admin mutations.
    The browser never computes entitlements, prices or usage truth.
+
+   Authorization: platform-admin authority resolves from `platform_admins`
+   (single trusted source), permission-scoped to billing.read / billing.operate.
    ────────────────────────────────────────────────────────────── */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -71,9 +74,16 @@ async function getUser(authHeader: string | null) {
   return data.user.id;
 }
 
-async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
-  const { data } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
-  return (data?.role) === 'forge_admin';
+/* Single trusted source of platform-admin authority: `platform_admins`.
+   `super_admin` and `billing_admin` hold both billing.read and billing.operate;
+   an explicit stored permission or wildcard is also honoured. */
+async function hasBillingPermission(admin: ReturnType<typeof createClient>, userId: string, perm: 'billing.read' | 'billing.operate'): Promise<boolean> {
+  const { data } = await admin.from('platform_admins').select('role, permissions, active').eq('user_id', userId).maybeSingle();
+  if (!data?.active) return false;
+  if (data.role === 'super_admin') return true;
+  if (data.role === 'billing_admin') return true;
+  const stored: string[] = Array.isArray(data.permissions) ? data.permissions.filter((p: unknown) => typeof p === 'string') : [];
+  return stored.includes('*') || stored.includes(perm);
 }
 
 type EffectivePlan = {
@@ -233,11 +243,13 @@ serve(async (req) => {
     const planKey = ep.plan_key;
     const entitlements = await readEntitlements(admin, planKey);
 
-    const { data: sub } = await admin.from('subscriptions').select('status, current_period_start, current_period_end')
+    const { data: sub } = await admin.from('subscriptions').select('status, current_period_start, current_period_end, billing_interval, cancel_at_period_end, trial_end')
       .eq('user_id', userId).in('status', ['active', 'trialing', 'past_due'])
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
-    // Owned workspaces + projects.
+    const { data: billingCustomer } = await admin.from('billing_customers').select('billing_email')
+      .eq('user_id', userId).maybeSingle();
+
     const { data: workspaces } = await admin.from('workspaces').select('id').eq('owner_id', userId);
     const workspaceIds = (workspaces ?? []).map((w: { id: string }) => w.id);
     const { data: projects } = workspaceIds.length
@@ -246,21 +258,18 @@ serve(async (req) => {
     const projectIds = (projects ?? []).map((p: { id: string }) => p.id);
     const activeProjects = (projects ?? []).filter((p: { status?: string }) => (p.status ?? 'draft') !== 'archived').length;
 
-    // Pages: maximum page count across the user's projects (limit is per project).
     let maxPages = 0;
     (projects ?? []).forEach((p: { blueprint?: { pages?: unknown[] } }) => {
       const count = Array.isArray(p.blueprint?.pages) ? p.blueprint.pages.length : 0;
       if (count > maxPages) maxPages = count;
     });
 
-    // AI credits used this period.
     const periodStart = sub?.current_period_start ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     const { data: creditRows } = await admin.from('usage_ledger').select('quantity')
       .eq('user_id', userId).eq('usage_type', 'ai_credit').in('status', ['reserved', 'settled'])
       .gte('created_at', periodStart);
     const aiCreditsUsed = (creditRows ?? []).reduce((sum: number, r: { quantity: number }) => sum + (r.quantity || 0), 0);
 
-    // Team members across the user's projects.
     let teamMembers = 0;
     try {
       const { data: members } = projectIds.length
@@ -269,7 +278,6 @@ serve(async (req) => {
       teamMembers = new Set((members ?? []).map((m: { user_id: string }) => m.user_id)).size;
     } catch { teamMembers = 0; }
 
-    // Published production sites (distinct active projects).
     let publishedSites = 0;
     try {
       const { data: deploys } = projectIds.length
@@ -278,7 +286,6 @@ serve(async (req) => {
       publishedSites = new Set((deploys ?? []).map((d: { project_id: string }) => d.project_id)).size;
     } catch { publishedSites = 0; }
 
-    // Custom domains.
     let customDomains = 0;
     try {
       const { data: domains } = projectIds.length
@@ -296,7 +303,7 @@ serve(async (req) => {
       { key: 'custom_domains', label: 'Custom domains', unit: 'domains', used: customDomains, limit: entitlements['custom_domains'] ?? null },
     ];
 
-    const adminFlag = await isAdmin(admin, userId);
+    const adminFlag = await hasBillingPermission(admin, userId, 'billing.read');
 
     return json({
       requestId, code: 'OK',
@@ -305,8 +312,11 @@ serve(async (req) => {
         accessLevel: ep.access_level,
         paidAccess: ep.paid_access,
         subscriptionStatus: ep.subscription_status ?? (sub?.status as string) ?? null,
-        billingInterval: 'month',
+        billingInterval: (sub?.billing_interval as 'month' | 'year' | null) ?? null,
         renewalDate: ep.period_end ?? (sub?.current_period_end as string) ?? null,
+        cancelAtPeriodEnd: (sub?.cancel_at_period_end as boolean) ?? false,
+        trialEnd: (sub?.trial_end as string | null) ?? null,
+        billingEmail: (billingCustomer?.billing_email as string | null) ?? null,
         resetDate: ep.reset_date,
         nextPlan: ep.next_plan,
         pricingConfigured: Boolean(Deno.env.get('STRIPE_RESTRICTED_KEY')),
@@ -316,11 +326,9 @@ serve(async (req) => {
     }, 200, cors);
   }
 
-  /* ── Admin mutations (server-authorised + audited) ── */
-  const adminFlag = await isAdmin(admin, userId);
-  if (!adminFlag) return error(requestId, 'FORBIDDEN', 'Admin access required', 403);
-
+  /* ── Admin actions (server-authorised, permission-scoped + audited) ── */
   if (action === 'admin_update_entitlement') {
+    if (!(await hasBillingPermission(admin, userId, 'billing.operate'))) return error(requestId, 'FORBIDDEN', 'Billing operate permission required', 403);
     const planKey = typeof body.planKey === 'string' ? body.planKey : '';
     const entitlementKey = typeof body.entitlementKey === 'string' ? body.entitlementKey : '';
     const limitValue = body.limitValue === null ? null : Number(body.limitValue);
@@ -340,6 +348,7 @@ serve(async (req) => {
   }
 
   if (action === 'admin_grant_credits') {
+    if (!(await hasBillingPermission(admin, userId, 'billing.operate'))) return error(requestId, 'FORBIDDEN', 'Billing operate permission required', 403);
     const targetUserId = typeof body.userId === 'string' ? body.userId : '';
     const credits = Number(body.credits) || 0;
     const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : '';
@@ -357,11 +366,13 @@ serve(async (req) => {
   }
 
   if (action === 'admin_billing_events') {
+    if (!(await hasBillingPermission(admin, userId, 'billing.read'))) return error(requestId, 'FORBIDDEN', 'Billing read permission required', 403);
     const { data } = await admin.from('billing_events').select('*').order('received_at', { ascending: false }).limit(100);
     return json({ requestId, code: 'OK', events: data ?? [] }, 200, cors);
   }
 
   if (action === 'admin_usage') {
+    if (!(await hasBillingPermission(admin, userId, 'billing.read'))) return error(requestId, 'FORBIDDEN', 'Billing read permission required', 403);
     const { data } = await admin.from('usage_ledger').select('*').order('created_at', { ascending: false }).limit(200);
     return json({ requestId, code: 'OK', ledger: data ?? [] }, 200, cors);
   }
