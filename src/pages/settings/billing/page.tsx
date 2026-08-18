@@ -10,6 +10,8 @@ import { LinkButton } from '@/pages/dashboard/components/LinkButton';
 import { CurrentPlanCard } from './components/CurrentPlanCard';
 import { UsageSection } from './components/UsageSection';
 import { PlanFeaturesSection } from './components/PlanFeaturesSection';
+import { AiCreditBalanceSection } from './components/AiCreditBalanceSection';
+import { CreditPurchasesSection } from './components/CreditPurchasesSection';
 import { BillingDetailsSection } from './components/BillingDetailsSection';
 import { SubscriptionActionsSection } from './components/SubscriptionActionsSection';
 import { capitalize } from './billingFormat';
@@ -132,6 +134,10 @@ export default function SettingsBillingPage() {
         <UsageSection meters={summary.meters} />
         <PlanFeaturesSection features={planEntry?.features ?? []} entitlements={planEntry?.entitlements ?? {}} />
       </div>
+
+      <AiCreditBalanceSection summary={summary} />
+
+      <CreditPurchasesSection />
 
       <BillingDetailsSection summary={summary} busy={busy} onManagePayment={handleManageBilling} />
 

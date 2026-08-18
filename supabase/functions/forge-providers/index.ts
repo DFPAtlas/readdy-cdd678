@@ -6,6 +6,12 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
    Provider secrets are encrypted (AES-GCM) before storage and the
    full key is never returned to a client.
 
+   NOTE (Prompt 1): `workspace_ai_keys` is now legacy BYOK
+   infrastructure. It is preserved temporarily for safe migration and
+   rollback, but is NOT the default source of AI credentials after the
+   routing phase. The new centrally managed vault lives in
+   `forge-credentials` + `platform_api_credentials`.
+
    Authorization: platform-admin authority resolves from `platform_admins`
    (single trusted source), permission-scoped to ai.operate.
    ────────────────────────────────────────────────────────────── */
@@ -43,7 +49,9 @@ function maskKey(key: string): string {
   return `••••${key.slice(-4)}`;
 }
 
-/* ─── AES-GCM encryption (server-side vault) ─── */
+/* ─── AES-GCM encryption (server-side vault, versioned payload) ───
+   The outer payload is plain JSON text; only `iv` and `data` are Base64.
+   This matches `forge-credentials` and `forge-ai` decryption exactly. */
 
 async function vaultKey(): Promise<CryptoKey | null> {
   const secret = Deno.env.get('FORGE_VAULT_KEY');
@@ -58,7 +66,7 @@ async function encryptKey(plain: string): Promise<string | null> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plain));
   const toB64 = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-  return JSON.stringify({ iv: toB64(iv), data: toB64(ciphertext) });
+  return JSON.stringify({ v: 1, alg: 'AES-GCM', iv: toB64(iv), data: toB64(ciphertext) });
 }
 
 /* ─── Connection test (never logs the key) ─── */

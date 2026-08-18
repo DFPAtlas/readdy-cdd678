@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { useProviders } from '@/hooks/useProviders';
-import { configureProvider } from '@/services/providersService';
+import { useForgeAi } from '@/hooks/useForgeAi';
 import { createProject, fetchProjects, type ProjectsProject } from '@/services/projectsService';
 import { updateDisplayName } from '@/services/profileService';
 import { Button } from '@/components/ui/Button';
@@ -44,12 +43,10 @@ function AllSetScreen() {
 
 function CompletionScreen({
   project,
-  aiConfigured,
-  providerNames,
+  aiIncluded,
 }: {
   project: ProjectsProject;
-  aiConfigured: boolean;
-  providerNames: string[];
+  aiIncluded: boolean;
 }) {
   return (
     <div className="min-h-screen bg-forge-bg flex flex-col items-center justify-center px-4">
@@ -69,7 +66,7 @@ function CompletionScreen({
           <div className="flex items-center justify-between gap-3 py-2">
             <span className="text-xs text-forge-text-muted">AI</span>
             <span className="text-sm text-forge-text-primary text-right">
-              {aiConfigured ? providerNames.join(', ') : 'Not configured'}
+              {aiIncluded ? 'Included with your plan' : 'Not available'}
             </span>
           </div>
         </div>
@@ -83,13 +80,9 @@ function CompletionScreen({
           </LinkButton>
         </div>
 
-        {!aiConfigured && (
+        {!aiIncluded && (
           <p className="mt-4 text-xs text-forge-text-muted">
-            You can configure AI providers anytime from{' '}
-            <Link to="/settings/providers" className="text-forge-amber hover:underline">
-              Settings
-            </Link>
-            .
+            Upgrade your plan to include AI-assisted development.
           </p>
         )}
       </div>
@@ -100,7 +93,7 @@ function CompletionScreen({
 export default function OnboardingPage() {
   const hasCompletedSetup = useAuthStore((s) => s.hasCompletedSetup);
   const setSetupComplete = useAuthStore((s) => s.setSetupComplete);
-  const providers = useProviders();
+  const forgeAi = useForgeAi();
 
   const [step, setStep] = useState(1);
   const [displayName, setDisplayName] = useState('');
@@ -126,14 +119,8 @@ export default function OnboardingPage() {
     };
   }, []);
 
-  const configuredProviders = providers.data.providers.filter((p) => p.configured);
+  const aiOperational = forgeAi.data.activeProviders.length > 0;
   const alreadySetUp = hasCompletedSetup || (existingProjects !== null && existingProjects.length > 0);
-
-  const handleConfigure = async (providerKey: string, apiKey: string) => {
-    const res = await configureProvider(providerKey, apiKey);
-    if (res.ok) await providers.refresh();
-    return res;
-  };
 
   const goNextFromWorkspace = async () => {
     const trimmed = displayName.trim();
@@ -182,8 +169,7 @@ export default function OnboardingPage() {
     return (
       <CompletionScreen
         project={createdProject}
-        aiConfigured={configuredProviders.length > 0}
-        providerNames={configuredProviders.map((p) => p.provider.display_name)}
+        aiIncluded={aiOperational}
       />
     );
   }
@@ -243,11 +229,10 @@ export default function OnboardingPage() {
                 Connect an AI provider now, or continue without AI.
               </p>
               <AiStatusStep
-                data={providers.data}
-                loading={providers.loading}
-                error={providers.error}
-                onRetry={providers.retry}
-                onConfigure={handleConfigure}
+                data={forgeAi.data}
+                loading={forgeAi.loading}
+                error={forgeAi.error}
+                onRetry={forgeAi.retry}
               />
             </div>
           )}
@@ -365,7 +350,7 @@ export default function OnboardingPage() {
               icon={<ArrowRight className="h-3.5 w-3.5" />}
               iconPosition="right"
             >
-              {step === 2 && configuredProviders.length === 0 ? 'Continue without AI' : 'Continue'}
+              Continue
             </Button>
           </div>
         )}

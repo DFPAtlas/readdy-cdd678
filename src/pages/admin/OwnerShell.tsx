@@ -35,6 +35,7 @@ const GROUPS: NavGroup[] = [
     label: 'Platform',
     items: [
       { to: '/forge-admin/ai', label: 'AI', icon: 'ri-robot-line', perm: 'ai.operate' },
+      { to: '/forge-admin/api-keys', label: 'API Keys', icon: 'ri-key-2-line', perm: 'secrets.manage' },
       { to: '/forge-admin/integrations', label: 'Integrations', icon: 'ri-plug-line', perm: 'ai.operate' },
       { to: '/forge-admin/agents', label: 'Agents', icon: 'ri-team-line', perm: 'ai.operate' },
       { to: '/forge-admin/builds', label: 'Builds', icon: 'ri-hammer-line', perm: 'dashboard.read' },

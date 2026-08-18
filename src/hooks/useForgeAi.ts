@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  createEmptyProvidersData,
-  fetchProviders,
-  type ProvidersData,
-} from '@/services/providersService';
+import { createEmptyForgeAiStatus, fetchForgeAiStatus, type ForgeAiStatus } from '@/services/forgeAiService';
 
-export function useProviders() {
-  const [data, setData] = useState<ProvidersData>(createEmptyProvidersData);
+export function useForgeAi() {
+  const [data, setData] = useState<ForgeAiStatus>(createEmptyForgeAiStatus);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -15,7 +11,7 @@ export function useProviders() {
     setLoading(true);
     setError(false);
     try {
-      setData(await fetchProviders());
+      setData(await fetchForgeAiStatus());
     } catch {
       setError(true);
     } finally {
@@ -26,7 +22,7 @@ export function useProviders() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      setData(await fetchProviders());
+      setData(await fetchForgeAiStatus());
     } catch {
       // Keep existing data on a background refresh failure.
     } finally {

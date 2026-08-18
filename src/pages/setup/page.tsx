@@ -1,37 +1,13 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useProviders } from '@/hooks/useProviders';
-import { configureProvider, disconnectProvider } from '@/services/providersService';
-import type { AiProviderInfo } from '@/pages/projects/sandbox/sandboxAiOrchestration';
+import { useForgeAi } from '@/hooks/useForgeAi';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { ErrorState } from '@/components/ui/ErrorState';
-import { ProviderCard } from '@/pages/settings/providers/components/ProviderCard';
-import { ConfigureProviderModal } from '@/pages/settings/providers/components/ConfigureProviderModal';
-import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
-import { Zap, Cpu, Database, ArrowRight } from 'lucide-react';
+import { Zap, Cpu, Database, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function SetupPage() {
   const navigate = useNavigate();
-  const { data, loading, error, retry, refresh } = useProviders();
-  const [configuring, setConfiguring] = useState<AiProviderInfo | null>(null);
-  const [disconnecting, setDisconnecting] = useState<AiProviderInfo | null>(null);
-  const [disconnectBusy, setDisconnectBusy] = useState(false);
+  const { data: forgeAi } = useForgeAi();
 
-  const handleConfigure = async (providerKey: string, apiKey: string) => {
-    const res = await configureProvider(providerKey, apiKey);
-    if (res.ok) await refresh();
-    return res;
-  };
-
-  const handleDisconnect = async () => {
-    if (!disconnecting) return;
-    setDisconnectBusy(true);
-    const res = await disconnectProvider(disconnecting.provider_key);
-    setDisconnectBusy(false);
-    setDisconnecting(null);
-    if (res.ok) await refresh();
-  };
+  const operational = forgeAi.activeProviders.length > 0;
 
   return (
     <div className="min-h-screen bg-forge-bg flex flex-col items-center px-4 py-12">
@@ -44,46 +20,36 @@ export default function SetupPage() {
         <p className="text-xs font-semibold tracking-widest text-forge-amber uppercase mb-2">Setup</p>
         <h1 className="text-2xl font-bold text-forge-text-primary">Set up Forge</h1>
         <p className="text-sm text-forge-text-muted mt-1 max-w-xl">
-          Configure the essentials Forge needs before you begin building. AI is optional — you can change
-          it anytime from Settings.
+          Forge is ready to use. AI and your workspace data are provisioned automatically — nothing to
+          configure here.
         </p>
 
         <div className="mt-8 space-y-4">
           <section className="rounded-lg border border-forge-border-subtle bg-forge-panel p-5">
             <div className="flex items-center gap-2 mb-1">
               <Cpu className="h-4 w-4 text-forge-amber" />
-              <h2 className="text-sm font-semibold text-forge-text-primary">AI provider</h2>
+              <h2 className="text-sm font-semibold text-forge-text-primary">Forge AI</h2>
             </div>
             <p className="text-xs text-forge-text-muted mb-4">
-              Connect a provider so Forge can use AI-assisted development. Skipping is fine — features that
-              need AI will prompt you to configure later.
+              Forge securely manages the AI providers used by your projects. Access is included
+              according to your subscription plan.
             </p>
 
-            {loading ? (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                {[0, 1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-32 w-full" />
-                ))}
-              </div>
-            ) : error ? (
-              <ErrorState title="Unable to load AI providers" onRetry={retry} />
-            ) : (
-              <>
-                <p className="text-xs text-forge-text-muted mb-3">
-                  {data.configuredCount} of {data.providers.length} providers configured
+            <div
+              className={`rounded-md border px-3 py-2.5 flex items-start gap-2 ${
+                operational ? 'bg-forge-success/10 border-forge-success/20' : 'bg-forge-bg border-forge-border-subtle'
+              }`}
+            >
+              <Cpu className={`h-4 w-4 mt-0.5 shrink-0 ${operational ? 'text-forge-success' : 'text-forge-text-muted'}`} />
+              <div>
+                <p className="text-sm font-medium text-forge-text-primary">
+                  {operational ? 'Forge AI is ready' : 'Forge AI is managed for you'}
                 </p>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                  {data.providers.map((info) => (
-                    <ProviderCard
-                      key={info.provider.id}
-                      info={info}
-                      onConfigure={setConfiguring}
-                      onDisconnect={setDisconnecting}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+                <p className="text-xs text-forge-text-muted mt-0.5">
+                  {forgeAi.planLabel} plan · {forgeAi.monthlyCreditLimit.toLocaleString('en-US')} monthly credits
+                </p>
+              </div>
+            </div>
           </section>
 
           <section className="rounded-lg border border-forge-border-subtle bg-forge-panel p-5 flex items-start gap-3">
@@ -104,33 +70,13 @@ export default function SetupPage() {
           </Button>
           <Button
             onClick={() => navigate('/onboarding')}
-            icon={<ArrowRight className="h-4 w-4" />}
+            icon={<CheckCircle2 className="h-4 w-4" />}
             iconPosition="right"
           >
             Continue
           </Button>
         </div>
       </div>
-
-      <ConfigureProviderModal
-        provider={configuring}
-        onClose={() => setConfiguring(null)}
-        onConfigure={handleConfigure}
-      />
-      <ConfirmationModal
-        open={disconnecting !== null}
-        onClose={() => setDisconnecting(null)}
-        onConfirm={() => void handleDisconnect()}
-        title="Disconnect provider?"
-        message={
-          disconnecting
-            ? `This removes the saved API key for ${disconnecting.display_name}. AI features that rely on this provider will stop working until it is reconfigured.`
-            : ''
-        }
-        confirmLabel="Disconnect"
-        variant="danger"
-        loading={disconnectBusy}
-      />
     </div>
   );
 }

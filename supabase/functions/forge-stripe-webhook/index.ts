@@ -49,8 +49,6 @@ function normalizeStatus(status) {
 }
 
 // Normalize plan from the active Stripe Price lookup key (never from stale Subscription metadata).
-// Strip only the exact '-yearly' suffix; allow only starter/builder/pro/agency.
-// Determine billing interval from the Price recurring interval.
 function normalizePlan(lookupKey, recurringInterval) {
   if (typeof lookupKey !== 'string' || !lookupKey) return null;
   const base = lookupKey.endsWith('-yearly') ? lookupKey.slice(0, -'-yearly'.length) : lookupKey;
@@ -154,6 +152,76 @@ async function recordEvent(eventId, eventType) {
   return 'retry';
 }
 
+/* ── AI credit top-up grant ─────────────────────────────────────────────
+   One-time payment (mode = 'payment') for forge_purchase_type =
+   'credit_topup'. Grants purchased credits ONLY when payment_status is
+   'paid'. Idempotent on `stripe-credit-{checkout_session_id}` so a retried
+   webhook never grants twice. Never stores card/CVC/secret material. */
+async function handleCreditTopup(session, event) {
+  if (session.mode !== 'payment') return { ok: true, ignored: 'not_payment_session' };
+  const meta = session.metadata ?? {};
+  if (meta.forge_purchase_type !== 'credit_topup') return { ok: true, ignored: 'not_credit_topup' };
+  if (session.payment_status !== 'paid') return { ok: true, ignored: 'payment_not_paid' };
+
+  const userId = session.client_reference_id || meta.forge_user_id || null;
+  if (!userId) return { ok: false, reason: 'no_user_mapping' };
+
+  // Trusted credit amount — read from Stripe Price/product metadata where
+  // available (server-side truth), falling back to session metadata.
+  let credits = Number(meta.forge_credit_amount);
+  let priceId = null;
+  try {
+    if (stripe) {
+      const full = await stripe.checkout.sessions.retrieve(session.id, { expand: ['line_items.data.price.product'] });
+      const price = full?.line_items?.data?.[0]?.price ?? null;
+      if (price) {
+        if (price.type !== 'one_time') return { ok: false, reason: 'not_one_time_price' };
+        priceId = price.id ?? null;
+        const product = (typeof price.product === 'string') ? null : price.product;
+        const productCredits = product?.metadata?.forge_credit_amount;
+        if (productCredits) credits = Number(productCredits);
+      }
+    }
+  } catch {
+    /* keep session metadata fallback */
+  }
+
+  if (!Number.isFinite(credits) || credits <= 0) return { ok: false, reason: 'invalid_credit_amount' };
+
+  const idempotencyKey = `stripe-credit-${session.id}`;
+  const packKey = meta.forge_credit_pack ?? null;
+  const paymentIntentId = (typeof session.payment_intent === 'string') ? session.payment_intent : (session.payment_intent?.id ?? null);
+
+  // Idempotency: verify no settled purchase with this key already exists.
+  const { data: existing } = await admin
+    .from('usage_ledger')
+    .select('id')
+    .eq('idempotency_key', idempotencyKey)
+    .maybeSingle();
+  if (existing) return { ok: true, skipped: 'already_granted' };
+
+  const { error } = await admin.from('usage_ledger').insert({
+    user_id: userId,
+    usage_type: 'ai_credit_purchase',
+    quantity: credits,
+    status: 'settled',
+    idempotency_key: idempotencyKey,
+    provider: 'stripe',
+    safe_metadata: {
+      purchase_type: 'credit_topup',
+      pack_key: packKey,
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_price_id: priceId,
+      stripe_event_id: event.id,
+    },
+    settled_at: new Date().toISOString(),
+  });
+
+  if (error) return { ok: false, reason: 'db_error' };
+  return { ok: true, credits };
+}
+
 async function applySubscription(sub, session, eventCreatedSec) {
   const userId = await resolveUserId(sub, session);
   if (!userId) return { ok: false, reason: 'no_user_mapping' };
@@ -167,7 +235,6 @@ async function applySubscription(sub, session, eventCreatedSec) {
   const stripeCustomerId = customerIdOf(sub);
   const status = normalizeStatus(sub?.status);
 
-  // Out-of-order guard: never let an older event overwrite a newer snapshot.
   const { data: existing } = await admin
     .from('subscriptions')
     .select('stripe_event_created')
@@ -206,8 +273,6 @@ async function applySubscription(sub, session, eventCreatedSec) {
   return { ok: true, planKey: norm.planKey, status };
 }
 
-// Deleted subscriptions cannot be re-retrieved, so preserve the stored plan and only
-// transition the snapshot to Stripe's terminal 'canceled' state.
 async function applyDeletion(sub, eventCreatedSec) {
   const userId = await resolveUserId(sub, null);
   if (!userId) return { ok: false, reason: 'no_user_mapping' };
@@ -223,7 +288,6 @@ async function applyDeletion(sub, eventCreatedSec) {
     if (eventCreatedSec < existingSec) return { ok: true, skipped: 'out_of_order' };
   }
 
-  // Prefer the active Price lookup key if the deletion payload carries it; otherwise keep the stored plan.
   const item = sub?.items?.data?.[0];
   const price = item?.price ?? null;
   const norm = normalizePlan(price?.lookup_key ?? null, price?.recurring?.interval ?? null);
@@ -269,6 +333,10 @@ async function handleEvent(event) {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
+      // Credit top-ups are one-time payments and must not be treated as subscriptions.
+      if (session.mode === 'payment' && session.metadata?.forge_purchase_type === 'credit_topup') {
+        return handleCreditTopup(session, event);
+      }
       if (typeof session.subscription === 'string') {
         const sub = await retrieveSubscription(session.subscription);
         if (sub) return applySubscription(sub, session, createdSec);

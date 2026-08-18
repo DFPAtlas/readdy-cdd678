@@ -126,6 +126,12 @@ export async function fetchModelRegistry(): Promise<{ providers: AiProviderInfo[
   return { providers, models };
 }
 
+/* ─── Legacy BYOK (workspace_ai_keys) — no longer customer-facing ───
+   These client helpers map to forge-providers BYOK actions. They are
+   retained only for admin / migration compatibility and are NOT part of the
+   default, centrally managed AI routing path (platform_api_credentials).
+   Customers no longer add provider keys through these functions. */
+
 export async function listWorkspaceKeys(workspaceId: string): Promise<WorkspaceKeyInfo[]> {
   const data = await invoke('list_keys', { workspaceId });
   if (!data || data.code !== 'OK') return [];

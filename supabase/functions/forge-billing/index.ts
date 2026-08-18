@@ -3,7 +3,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 /* ──────────────────────────────────────────────────────────────
    Forge Billing — server-controlled plan catalogue, usage summary,
-   credit estimates, limit checks and audited admin mutations.
+   credit estimates, limit checks, credit balance/packs/purchases,
+   and audited admin mutations.
    The browser never computes entitlements, prices or usage truth.
 
    Authorization: platform-admin authority resolves from `platform_admins`
@@ -11,8 +12,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
    Effective-plan selection is DETERMINISTIC: prefer active → trialing →
    past_due, then most recently created. When more than one billable
-   subscription exists for the same user, `billingConflict` is reported
-   rather than silently granting whichever row happens to be returned first.
+   subscription exists for the same user, `billingConflict` is reported.
+
+   AI credit top-ups: purchased credits (ai_credit_purchase) are tracked
+   separately from monthly-included credits and consumed after them. The
+   trusted balance is computed server-side via forge_credit_balance().
    ────────────────────────────────────────────────────────────── */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -21,8 +25,15 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 
 const PLAN_KEYS = ['free', 'starter', 'builder', 'pro', 'agency'] as const;
 
-/* Billable subscription statuses (Stripe semantics). `canceled` and
-   `incomplete_expired` are terminal and never grant entitlements. */
+/* Trusted credit pack catalogue (display + trusted key). The browser never
+   sends a price or credit quantity; checkout only ever sends the pack key. */
+const CREDIT_PACKS = [
+  { key: 'credits_500', credits: 500, pricePence: 700 },
+  { key: 'credits_1500', credits: 1500, pricePence: 1800 },
+  { key: 'credits_5000', credits: 5000, pricePence: 5000, bestValue: true },
+  { key: 'credits_15000', credits: 15000, pricePence: 13500 },
+];
+
 const BILLABLE_STATUSES = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'];
 const STATUS_PRIORITY: Record<string, number> = { active: 0, trialing: 1, past_due: 2, unpaid: 3, incomplete: 4 };
 
@@ -102,9 +113,6 @@ async function getUser(authHeader: string | null) {
   return data.user.id;
 }
 
-/* Single trusted source of platform-admin authority: `platform_admins`.
-   `super_admin` and `billing_admin` hold both billing.read and billing.operate;
-   an explicit stored permission or wildcard is also honoured. */
 async function hasBillingPermission(admin: ReturnType<typeof createClient>, userId: string, perm: 'billing.read' | 'billing.operate'): Promise<boolean> {
   const { data } = await admin.from('platform_admins').select('role, permissions, active').eq('user_id', userId).maybeSingle();
   if (!data?.active) return false;
@@ -147,9 +155,6 @@ async function readEntitlements(admin: ReturnType<typeof createClient>, planKey:
   return map;
 }
 
-/* Deterministic effective-subscription pick: prefer active → trialing →
-   past_due → unpaid → incomplete, then most recently created. Never lets an
-   unordered query choose arbitrarily between multiple subscriptions. */
 function pickEffectiveSubscription(subs: Array<Record<string, unknown>>): Record<string, unknown> | null {
   if (!subs || subs.length === 0) return null;
   const sorted = [...subs].sort((a, b) => {
@@ -159,6 +164,16 @@ function pickEffectiveSubscription(subs: Array<Record<string, unknown>>): Record
     return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   });
   return sorted[0];
+}
+
+/* Trusted credit balance via the SQL helper (monthly + purchased buckets). */
+async function creditBalance(admin: ReturnType<typeof createClient>, userId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await admin.rpc('forge_credit_balance', { p_user_id: userId });
+    return (data as Record<string, unknown>) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -188,6 +203,29 @@ serve(async (req) => {
       plans.push({ key, name: meta.name, description: meta.description, features: meta.features, sortOrder: meta.sortOrder, price: null, entitlements });
     }
     return json({ requestId, code: 'OK', catalogue: { pricingConfigured, plans } }, 200, cors);
+  }
+
+  /* ── Credit packs (trusted one-time top-up catalogue) ── */
+  if (action === 'credit_packs') {
+    return json({ requestId, code: 'OK', packs: CREDIT_PACKS }, 200, cors);
+  }
+
+  /* ── Credit balance (monthly + purchased buckets) ── */
+  if (action === 'credit_balance') {
+    const balance = await creditBalance(admin, userId);
+    if (!balance) return error(requestId, 'BALANCE_FAILED', 'Could not load credit balance.', 500, cors);
+    return json({ requestId, code: 'OK', balance }, 200, cors);
+  }
+
+  /* ── Credit purchase history (safe metadata only) ── */
+  if (action === 'credit_purchases') {
+    const { data: purchases } = await admin.from('usage_ledger')
+      .select('quantity, status, provider, safe_metadata, settled_at, created_at')
+      .eq('user_id', userId)
+      .eq('usage_type', 'ai_credit_purchase')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    return json({ requestId, code: 'OK', purchases: purchases ?? [] }, 200, cors);
   }
 
   /* ── Credit cost estimate (server-controlled) ── */
@@ -286,8 +324,6 @@ serve(async (req) => {
     const planKey = ep.plan_key;
     const entitlements = await readEntitlements(admin, planKey);
 
-    // Deterministic selection across ALL billable subscriptions, not an
-    // arbitrary `.maybeSingle()`. Detect multi-subscription conflict.
     const { data: billableSubs } = await admin.from('subscriptions')
       .select('id, status, plan_key, current_period_start, current_period_end, billing_interval, cancel_at_period_end, trial_end, created_at')
       .eq('user_id', userId).in('status', BILLABLE_STATUSES)
@@ -354,6 +390,9 @@ serve(async (req) => {
 
     const adminFlag = await hasBillingPermission(admin, userId, 'billing.read');
 
+    // Credit buckets (monthly included + purchased), computed server-side.
+    const balance = await creditBalance(admin, userId);
+
     return json({
       requestId, code: 'OK',
       summary: {
@@ -372,6 +411,13 @@ serve(async (req) => {
         pricingConfigured: Boolean(Deno.env.get('STRIPE_RESTRICTED_KEY')),
         isAdmin: adminFlag,
         meters,
+        monthlyCreditsLimit: balance?.monthly_credit_limit ?? null,
+        monthlyCreditsUsed: balance?.monthly_credits_used ?? null,
+        monthlyCreditsRemaining: balance?.monthly_credits_remaining ?? null,
+        purchasedCreditsTotal: balance?.purchased_credits_total ?? null,
+        purchasedCreditsUsed: balance?.purchased_credits_used ?? null,
+        purchasedCreditsRemaining: balance?.purchased_credits_remaining ?? null,
+        totalCreditsRemaining: balance?.total_credits_remaining ?? null,
       },
     }, 200, cors);
   }

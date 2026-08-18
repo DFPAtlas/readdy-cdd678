@@ -6,6 +6,9 @@ import {
   RefreshCw, Rocket, ShieldCheck, Star, Tag, Users, Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { getSupabaseClient } from '@/services/supabaseClient';
+import { DropdownMenu, DropdownItem, DropdownDivider, DropdownLabel } from '@/components/ui/DropdownMenu';
+import { NotificationsPopover } from '@/components/feature/NotificationsPopover';
 import {
   fetchPlanCatalogue, fetchUsageSummary, openBillingPortal,
   type PlanCatalogue, type PlanKey, type UsageSummary,
@@ -151,6 +154,8 @@ export default function PricingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
   const [interval, setIntervalState] = useState<'month' | 'year'>('month');
   const [catalogue, setCatalogue] = useState<PlanCatalogue | null>(null);
   const [summary, setSummary] = useState<UsageSummary | null>(null);
@@ -253,6 +258,17 @@ export default function PricingPage() {
     navigate(`/checkout?plan=${plan.key}&interval=${interval}`);
   }
 
+  async function handleSignOut(): Promise<void> {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
+    setUser(null);
+    navigate('/login');
+  }
+
+  const avatarInitial = (user?.email?.charAt(0) ?? 'A').toUpperCase();
+
   const NoticeIcon = notice?.kind === 'error' ? AlertTriangle : ShieldCheck;
 
   return (
@@ -269,7 +285,40 @@ export default function PricingPage() {
           <button type="button" onClick={() => navigate('/templates')}><LayoutTemplate />Templates</button>
           <button type="button" className="active"><Tag />Pricing</button>
         </nav>
-        <div className="forge-pricing-tools"><button type="button" onClick={() => navigate('/help')} aria-label="Help"><HelpCircle /></button><button type="button" aria-label="Notifications"><Bell /></button><span>A</span><ChevronDown /></div>
+        <div className="forge-pricing-tools">
+          <button type="button" onClick={() => navigate('/help')} aria-label="Help"><HelpCircle /></button>
+          <NotificationsPopover
+            trigger={
+              <button type="button" aria-label="Notifications" className="forge-pricing-hide-mobile"><Bell /></button>
+            }
+          />
+          <DropdownMenu
+            align="right"
+            trigger={
+              <button type="button" className="forge-pricing-account" aria-label="Account menu">
+                <span className="forge-pricing-avatar">{avatarInitial}</span>
+                <ChevronDown className="forge-pricing-chevron" />
+              </button>
+            }
+          >
+            {isAuthenticated ? (
+              <>
+                <DropdownLabel>{user?.email ?? 'Account'}</DropdownLabel>
+                <DropdownItem onClick={() => navigate('/settings/profile')}>Profile</DropdownItem>
+                <DropdownItem onClick={() => navigate('/settings')}>Settings</DropdownItem>
+                <DropdownDivider />
+                <DropdownItem onClick={() => navigate('/help')}>Help</DropdownItem>
+                <DropdownItem onClick={() => void handleSignOut()} danger>Sign out</DropdownItem>
+              </>
+            ) : (
+              <>
+                <DropdownLabel>Account</DropdownLabel>
+                <DropdownItem onClick={() => navigate('/login')}>Sign in</DropdownItem>
+                <DropdownItem onClick={() => navigate('/help')}>Help</DropdownItem>
+              </>
+            )}
+          </DropdownMenu>
+        </div>
       </header>
 
       <main>
@@ -364,7 +413,7 @@ export default function PricingPage() {
 
         <section className="forge-pricing-summary">
           <article className="forge-credit-card">
-            <div className="forge-credit-icon"><Zap /></div><div><h2>Need more power?</h2><p>Buy extra AI credits anytime — they never interrupt your build.</p><button type="button" onClick={() => navigate('/dashboard')}>Buy AI credits</button></div>
+            <div className="forge-credit-icon"><Zap /></div><div><h2>Need more power?</h2><p>Buy extra AI credits anytime — they never interrupt your build.</p><button type="button" onClick={() => navigate('/credits')}>Buy AI credits</button></div>
           </article>
 
           <article className="forge-live-usage">

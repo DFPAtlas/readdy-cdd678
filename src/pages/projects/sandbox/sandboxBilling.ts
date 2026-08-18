@@ -76,7 +76,43 @@ export type UsageSummary = {
   billingConflict: boolean;
   pricingConfigured: boolean;
   isAdmin: boolean;
+  monthlyCreditsLimit: number | null;
+  monthlyCreditsUsed: number | null;
+  monthlyCreditsRemaining: number | null;
+  purchasedCreditsTotal: number | null;
+  purchasedCreditsUsed: number | null;
+  purchasedCreditsRemaining: number | null;
+  totalCreditsRemaining: number | null;
   meters: Meter[];
+};
+
+/* ── AI credit top-ups (one-time, purchased bucket) ── */
+
+export type CreditPack = {
+  key: string;
+  credits: number;
+  pricePence: number;
+  bestValue?: boolean;
+};
+
+export type CreditBalance = {
+  plan_key: string;
+  monthly_credit_limit: number | null;
+  monthly_credits_used: number | null;
+  monthly_credits_remaining: number | null;
+  purchased_credits_total: number | null;
+  purchased_credits_used: number | null;
+  purchased_credits_remaining: number | null;
+  total_credits_remaining: number | null;
+};
+
+export type CreditPurchase = {
+  quantity: number;
+  status: string;
+  provider: string | null;
+  safe_metadata: Record<string, unknown> | null;
+  settled_at: string | null;
+  created_at: string | null;
 };
 
 export type PageLimitResult = {
@@ -140,6 +176,24 @@ export async function fetchUsageSummary(): Promise<UsageSummary | null> {
   return data.summary as UsageSummary;
 }
 
+export async function fetchCreditPacks(): Promise<CreditPack[] | null> {
+  const data = await invoke('credit_packs');
+  if (!data || data.code !== 'OK' || !Array.isArray(data.packs)) return null;
+  return data.packs as CreditPack[];
+}
+
+export async function fetchCreditBalance(): Promise<CreditBalance | null> {
+  const data = await invoke('credit_balance');
+  if (!data || data.code !== 'OK' || !data.balance) return null;
+  return data.balance as CreditBalance;
+}
+
+export async function fetchCreditPurchases(): Promise<CreditPurchase[] | null> {
+  const data = await invoke('credit_purchases');
+  if (!data || data.code !== 'OK' || !Array.isArray(data.purchases)) return null;
+  return data.purchases as CreditPurchase[];
+}
+
 export async function estimateAiCredits(taskClass: string): Promise<CreditEstimate | null> {
   const data = await invoke('estimate', { taskClass });
   if (!data || data.code !== 'OK' || !data.estimate) return null;
@@ -189,6 +243,8 @@ export function checkoutErrorMessage(code: string | null | undefined, fallback?:
       return 'Checkout isn\u2019t fully configured yet. Please try again shortly.';
     case 'INVALID_PLAN':
       return 'That plan isn\u2019t available.';
+    case 'INVALID_PACK':
+      return 'That credit pack isn\u2019t available.';
     case 'INVALID_INTERVAL':
       return 'That billing interval isn\u2019t available.';
     case 'INVALID_REQUEST_KEY':
@@ -338,6 +394,51 @@ export async function openBillingPortal(): Promise<CheckoutResult> {
     const { errorCode, message } = await parseCheckoutErrorContext(err);
     const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
     return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message) };
+  }
+}
+
+/* One-time AI credit top-up checkout. The browser sends only the trusted pack
+   key + requestKey + returnBase; the server selects the Stripe one-time price
+   and credit amount. Never a browser-chosen price or credit quantity. */
+export async function createCreditTopupSession(
+  packKey: string,
+  requestKey: string,
+): Promise<HostedCheckoutResult> {
+  const supabase = getSandboxClient();
+  if (!supabase) {
+    return { ok: false, errorCode: 'CHECKOUT_UNAVAILABLE', message: checkoutErrorMessage('CHECKOUT_UNAVAILABLE') };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('forge-create-checkout', {
+      body: { action: 'credit_topup', packKey, requestKey, returnBase: appReturnBase() },
+    });
+
+    if (error) {
+      const { errorCode, message, status } = await parseCheckoutErrorContext(error);
+      const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
+      const statusLabel = status != null ? String(status) : 'n/a';
+      const diagnostic = `invoke-error code=${code} status=${statusLabel} name=${(error as { name?: string })?.name ?? 'n/a'} msg=${message ?? (error as { message?: string })?.message ?? 'n/a'}`;
+      return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message), diagnostic };
+    }
+
+    if (data && data.code === 'OK' && typeof data.url === 'string') {
+      return { ok: true, url: data.url };
+    }
+
+    if (data && typeof data.errorCode === 'string') {
+      const code = String(data.errorCode);
+      const message = typeof data.message === 'string' ? data.message : null;
+      const diagnostic = `server code=${code} msg=${message ?? 'n/a'}`;
+      return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message), diagnostic };
+    }
+
+    return { ok: false, errorCode: 'CHECKOUT_UNAVAILABLE', message: checkoutErrorMessage('CHECKOUT_UNAVAILABLE'), diagnostic: `empty-response data=${JSON.stringify(data)?.slice(0, 200) ?? 'null'}` };
+  } catch (err) {
+    const { errorCode, message } = await parseCheckoutErrorContext(err);
+    const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
+    const diagnostic = `throw code=${code} name=${(err as { name?: string })?.name ?? 'n/a'} msg=${(err as { message?: string })?.message ?? 'n/a'}`;
+    return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message), diagnostic };
   }
 }
 

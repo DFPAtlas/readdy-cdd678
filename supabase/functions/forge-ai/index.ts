@@ -7,6 +7,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
    * Specialist agents that return schema-validated structured change sets.
    * Circuit breaker + visible fallback.
    * Job / agent-run / change-set audit recording.
+   * Centrally managed platform credentials (platform_api_credentials),
+     decrypted server-side with FORGE_VAULT_KEY. Customers no longer
+     supply provider keys.
    Never trust a client-supplied user id, cost, model, or ownership claim.
    ────────────────────────────────────────────────────────────── */
 
@@ -116,7 +119,7 @@ function agentsForTask(taskClass: string): AgentDef[] {
   }
 }
 
-/* Provider credential mapping (server-side only). */
+/* Provider credential mapping (server-side env fallback only). */
 const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   openai: ['FORGE_OPENAI_API_KEY'],
   anthropic: ['FORGE_ANTHROPIC_API_KEY'],
@@ -317,6 +320,7 @@ function validateComponentOps(raw: unknown): unknown[] | null {
 type RegistryModel = {
   id: string;
   provider_key: string;
+  provider_status: string;
   provider_base_url: string | null;
   provider_data_classification: string;
   model_key: string;
@@ -334,7 +338,7 @@ type RegistryModel = {
 async function loadRegistry(admin: ReturnType<typeof createClient>): Promise<RegistryModel[]> {
   const { data: models } = await admin
     .from('ai_models')
-    .select('id, model_key, display_name, capabilities, allowed_plans, context_window, relative_speed, relative_cost, routing_priority, fallback_priority, data_handling, provider:provider_id(provider_key, base_url, data_classification)')
+    .select('id, model_key, display_name, capabilities, allowed_plans, context_window, relative_speed, relative_cost, routing_priority, fallback_priority, data_handling, provider:provider_id(provider_key, status, base_url, data_classification)')
     .eq('enabled', true);
   if (!models) return [];
   return models.map((m: Record<string, unknown>) => {
@@ -342,6 +346,7 @@ async function loadRegistry(admin: ReturnType<typeof createClient>): Promise<Reg
     return {
       id: m.id as string,
       provider_key: (provider.provider_key as string) ?? '',
+      provider_status: (provider.status as string) ?? '',
       provider_base_url: (provider.base_url as string | null) ?? null,
       provider_data_classification: (provider.data_classification as string) ?? 'cloud',
       model_key: (m.model_key as string) ?? '',
@@ -358,15 +363,19 @@ async function loadRegistry(admin: ReturnType<typeof createClient>): Promise<Reg
   });
 }
 
-/* ─── BYOK decryption (AES-GCM, server-side only) ─── */
+/* ─── BYOK / platform decryption (AES-GCM, server-side only) ───
+   Versioned payload; outer is JSON text, only `iv` and `data` are Base64.
+   Decryption parses JSON (NOT base64 whole). */
 
-async function decryptKey(encryptedBase64: string): Promise<string | null> {
+async function decryptKey(encryptedSecret: string): Promise<string | null> {
   try {
     const vaultKey = Deno.env.get('FORGE_VAULT_KEY');
     if (!vaultKey) return null;
     const keyMaterial = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(vaultKey));
     const key = await crypto.subtle.importKey('raw', keyMaterial, { name: 'AES-GCM' }, false, ['decrypt']);
-    const payload = JSON.parse(atob(encryptedBase64));
+    const payload = JSON.parse(encryptedSecret);
+    if (payload.v !== 1) return null;
+    if (payload.alg !== 'AES-GCM') return null;
     const iv = Uint8Array.from(atob(payload.iv), (c: string) => c.charCodeAt(0));
     const ciphertext = Uint8Array.from(atob(payload.data), (c: string) => c.charCodeAt(0));
     const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
@@ -376,6 +385,41 @@ async function decryptKey(encryptedBase64: string): Promise<string | null> {
   }
 }
 
+/* ─── Platform credential vault (server-side only) ───
+   The centrally managed source of AI credentials. Reads only active,
+   production credentials from `platform_api_credentials` and decrypts
+   them with FORGE_VAULT_KEY. The secret is never returned or logged. */
+
+type PlatformCredential = { apiKey?: string; url?: string; credentialId: string };
+
+async function loadPlatformCredentials(admin: ReturnType<typeof createClient>): Promise<Record<string, PlatformCredential>> {
+  const { data: rows } = await admin.from('platform_api_credentials')
+    .select('id, provider_key, encrypted_secret, metadata')
+    .eq('environment', 'production')
+    .eq('status', 'active');
+  const creds: Record<string, PlatformCredential> = {};
+  for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+    const plain = await decryptKey(row.encrypted_secret as string);
+    if (!plain) continue;
+    const meta = (row.metadata && typeof row.metadata === 'object')
+      ? (row.metadata as Record<string, unknown>) : {};
+    creds[row.provider_key as string] = {
+      apiKey: plain,
+      url: typeof meta.base_url === 'string' ? meta.base_url : undefined,
+      credentialId: row.id as string,
+    };
+  }
+  return creds;
+}
+
+async function isFeatureEnabled(admin: ReturnType<typeof createClient>, flagKey: string): Promise<boolean> {
+  const { data } = await admin.from('feature_flags').select('enabled').eq('flag_key', flagKey).maybeSingle();
+  return data?.enabled === true;
+}
+
+/* Legacy BYOK (workspace_ai_keys) — retained only for safe migration / rollback
+   behind the disabled `enterprise_byok_enabled` feature flag. Never the default
+   source of AI credentials. */
 async function loadWorkspaceKeys(admin: ReturnType<typeof createClient>, workspaceId: string): Promise<Record<string, string>> {
   const keys: Record<string, string> = {};
   const { data: rows } = await admin.from('workspace_ai_keys').select('provider_key, encrypted_key').eq('workspace_id', workspaceId).eq('environment', 'production');
@@ -387,13 +431,25 @@ async function loadWorkspaceKeys(admin: ReturnType<typeof createClient>, workspa
   return keys;
 }
 
-function providerCredential(providerKey: string, workspaceKeys: Record<string, string>): { apiKey?: string; url?: string } | null {
-  if (workspaceKeys[providerKey]) return { apiKey: workspaceKeys[providerKey] };
+/* Credential resolution order:
+   1. Active production platform credential (platform_api_credentials)
+   2. Ollama/local gateway (local-only deployments)
+   3. Legacy BYOK workspace key (only when enterprise_byok_enabled)
+   4. Server environment-variable credential (temporary deployment fallback)
+   Returns null → safe PROVIDER_NOT_CONFIGURED. Never logs the secret. */
+function providerCredential(
+  providerKey: string,
+  platformCreds: Record<string, PlatformCredential>,
+  byokKeys: Record<string, string>,
+): { apiKey?: string; url?: string; credentialId?: string } | null {
+  const pc = platformCreds[providerKey];
+  if (pc) return { apiKey: pc.apiKey, url: pc.url, credentialId: pc.credentialId };
   if (providerKey === 'ollama') {
     const url = Deno.env.get('FORGE_OLLAMA_URL');
     if (url) return { url, apiKey: Deno.env.get('FORGE_OLLAMA_TOKEN') ?? undefined };
     return null;
   }
+  if (byokKeys[providerKey]) return { apiKey: byokKeys[providerKey] };
   const envKeys = PROVIDER_ENV_KEYS[providerKey] ?? [];
   const apiKey = envKeys.map((k) => Deno.env.get(k)).find(Boolean);
   if (apiKey) return { apiKey };
@@ -402,13 +458,14 @@ function providerCredential(providerKey: string, workspaceKeys: Record<string, s
 
 /* ─── Router (capability + plan + availability + preference) ─── */
 
-function routeModels(registry: RegistryModel[], capability: string, planCode: string, workspaceKeys: Record<string, string>, localOnly: boolean, preferredModel?: string): RegistryModel[] {
+function routeModels(registry: RegistryModel[], capability: string, planCode: string, platformCreds: Record<string, PlatformCredential>, byokKeys: Record<string, string>, localOnly: boolean, preferredModel?: string): RegistryModel[] {
   return registry
     .filter((m) => {
       if (!m.capabilities.includes(capability)) return false;
       if (m.allowed_plans.length && !m.allowed_plans.includes(planCode)) return false;
+      if (m.provider_status && m.provider_status !== 'active') return false;
       if (localOnly && m.data_handling !== 'local' && m.data_handling !== 'self_hosted') return false;
-      return providerCredential(m.provider_key, workspaceKeys) !== null;
+      return providerCredential(m.provider_key, platformCreds, byokKeys) !== null;
     })
     .sort((a, b) => {
       if (preferredModel) {
@@ -474,8 +531,8 @@ function parseProposalContent(content: unknown): ProviderResult['proposal'] {
   };
 }
 
-async function callProviderModel(model: RegistryModel, agent: AgentDef, prompt: string, contextJson: string, outputTokens: number, signal?: AbortSignal): Promise<ProviderResult> {
-  const cred = providerCredential(model.provider_key, {});
+async function callProviderModel(model: RegistryModel, agent: AgentDef, prompt: string, contextJson: string, outputTokens: number, platformCreds: Record<string, PlatformCredential>, byokKeys: Record<string, string>, signal?: AbortSignal): Promise<ProviderResult> {
+  const cred = providerCredential(model.provider_key, platformCreds, byokKeys);
   const baseUrl = model.provider_base_url || PROVIDER_BASE_URLS[model.provider_key] || '';
   const started = Date.now();
   const sysPrompt = systemPrompt(agent);
@@ -713,11 +770,13 @@ serve(async (req) => {
   }
   const reservationId = reservation.reservation_id as string;
 
-  // Load registry + workspace keys, route to a model.
+  // Load registry + platform credentials, route to a model.
   const registry = await loadRegistry(admin);
-  const workspaceKeys = await loadWorkspaceKeys(admin, workspaceId);
+  const platformCreds = await loadPlatformCredentials(admin);
+  const byokEnabled = await isFeatureEnabled(admin, 'enterprise_byok_enabled');
+  const byokKeys = byokEnabled ? await loadWorkspaceKeys(admin, workspaceId) : {};
   const capability = TASK_CAPABILITY[taskClass] ?? 'layout';
-  const candidates = routeModels(registry, capability, planCode, workspaceKeys, localOnly, preferredModel || undefined);
+  const candidates = routeModels(registry, capability, planCode, platformCreds, byokKeys, localOnly, preferredModel || undefined);
 
   const providerStarted = Date.now();
   let providerResult: ProviderResult | null = null;
@@ -729,7 +788,7 @@ serve(async (req) => {
 
   if (candidates.length === 0) {
     providerMode = 'local';
-    errorCode = 'NO_PROVIDER';
+    errorCode = 'PROVIDER_NOT_CONFIGURED';
   } else {
     const agents = agentsForTask(taskClass);
     let modelIdx = 0;
@@ -743,7 +802,7 @@ serve(async (req) => {
         const candidate = candidates[m];
         try {
           const agentPrompt = a === agents.length - 1 && planText ? `${prompt}\n\nPlan from Planner:\n${planText.slice(0, 4000)}` : prompt;
-          agentResult = await callProviderModel(candidate, agent, agentPrompt, contextJson, maximumOutputTokens);
+          agentResult = await callProviderModel(candidate, agent, agentPrompt, contextJson, maximumOutputTokens, platformCreds, byokKeys);
           selectedModel = selectedModel ?? candidate;
           if (m > modelIdx) fallbackUsed = true;
           modelIdx = m;
@@ -804,6 +863,17 @@ serve(async (req) => {
     await userClient.rpc('settle_ai_credits', { p_reservation_id: reservationId, p_actual_quantity: actualCredits, p_provider: providerResult?.provider ?? null, p_model: providerResult?.model ?? null });
   } else {
     await userClient.rpc('release_ai_credits', { p_reservation_id: reservationId });
+  }
+
+  // Mark the platform credential as used (only after genuine provider use).
+  if (providerMode === 'live' && selectedModel) {
+    const usedCred = providerCredential(selectedModel.provider_key, platformCreds, byokKeys);
+    if (usedCred?.credentialId) {
+      await admin.from('platform_api_credentials')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('id', usedCred.credentialId)
+        .then(() => {}).catch(() => {});
+    }
   }
 
   await admin.from('ai_usage_events').update({

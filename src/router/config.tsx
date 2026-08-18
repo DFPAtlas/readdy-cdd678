@@ -27,6 +27,7 @@ import ProjectsPage from "@/pages/projects/page";
 import NewProjectPage from "@/pages/projects/new/page";
 import TemplatesPage from "@/pages/templates/page";
 import AgentsPage from "@/pages/agents/page";
+import CreditsPage from "@/pages/credits/page";
 import ActivityPage from "@/pages/activity/page";
 import SettingsLayout from "@/pages/settings/page";
 import SettingsRedirect from "@/pages/settings/redirect";
@@ -68,6 +69,7 @@ import { ModerationSection } from "@/pages/admin/ModerationSection";
 import { IncidentsSection } from "@/pages/admin/IncidentsSection";
 import { IntegrationsPage } from "@/pages/admin/IntegrationsPage";
 import { AgentsPage as AdminAgentsPage } from "@/pages/admin/AgentsPage";
+import { ApiKeysPage } from "@/pages/admin/ApiKeysPage";
 
 const routes: RouteObject[] = [
   // --- Public Routes ---
@@ -102,6 +104,7 @@ const routes: RouteObject[] = [
           { path: "/projects/new", element: <NewProjectPage /> },
           { path: "/templates", element: <TemplatesPage /> },
           { path: "/agents", element: <AgentsPage /> },
+          { path: "/credits", element: <CreditsPage /> },
           { path: "/activity", element: <ActivityPage /> },
           // Settings with nested routes
           {
@@ -157,6 +160,7 @@ const routes: RouteObject[] = [
       { path: "billing", element: <BillingPage /> },
       { path: "usage", element: <UsagePage /> },
       { path: "ai", element: <AiDeploySection /> },
+      { path: "api-keys", element: <ApiKeysPage /> },
       { path: "integrations", element: <IntegrationsPage /> },
       { path: "agents", element: <AdminAgentsPage /> },
       { path: "builds", element: <BuildsSection /> },

@@ -5,7 +5,7 @@ import { User, Palette, Cpu, Settings2, CreditCard } from 'lucide-react';
 const NAV_ITEMS = [
   { to: '/settings/profile', label: 'Profile', icon: User },
   { to: '/settings/appearance', label: 'Appearance', icon: Palette },
-  { to: '/settings/providers', label: 'AI Providers', icon: Cpu },
+  { to: '/settings/providers', label: 'Forge AI', icon: Cpu },
   { to: '/settings/billing', label: 'Billing', icon: CreditCard },
   { to: '/settings/system', label: 'System', icon: Settings2 },
 ];

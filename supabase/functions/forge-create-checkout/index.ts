@@ -22,6 +22,13 @@ import Stripe from 'npm:stripe@22';
      blocking status → ONLY if none, resolve Price → create Checkout Session.
    • Never create a second Stripe customer to bypass the guard.
 
+   AI credit top-ups (one-time, NOT subscriptions):
+   • `action = credit_topup` maps a TRUSTED pack key (credits_500/1500/5000/15000)
+     to a server-selected Stripe one-time Price. The browser NEVER sends a
+     price ID or a credit quantity — only the pack key + requestKey + returnBase.
+   • mode = payment (never subscription). Credit purchases never touch plan_key,
+     subscriptions, usage_periods or limits.
+
    Return-URL contract (the redirect-loop fix):
    • The browser sends `returnBase` (its real `location.origin` + base path)
      so Stripe success/cancel/portal URLs always point back to the exact
@@ -40,6 +47,15 @@ const ENABLE_AUTOMATIC_TAX = Deno.env.get('FORGE_ENABLE_AUTOMATIC_TAX') === 'tru
 
 const BILLABLE_PLAN_KEYS = ['starter', 'builder', 'pro', 'agency'] as const;
 type BillingInterval = 'month' | 'year';
+
+/* Trusted credit pack catalogue. The credit amount and Stripe lookup key are
+   defined here server-side; the browser only ever sends the pack key. */
+const CREDIT_PACKS: Record<string, { credits: number; lookupKey: string }> = {
+  credits_500: { credits: 500, lookupKey: 'credits_500' },
+  credits_1500: { credits: 1500, lookupKey: 'credits_1500' },
+  credits_5000: { credits: 5000, lookupKey: 'credits_5000' },
+  credits_15000: { credits: 15000, lookupKey: 'credits_15000' },
+};
 
 /* Subscription statuses that block creating another billable subscription.
    Stripe is authoritative — these are checked live against the customer's
@@ -116,8 +132,14 @@ function buildLookupKey(planKey: string, interval: BillingInterval): string {
 function isValidUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
 }
+function isValidCreditPack(packKey: unknown): packKey is string {
+  return typeof packKey === 'string' && Object.prototype.hasOwnProperty.call(CREDIT_PACKS, packKey);
+}
 function buildIdempotencyKey(userId: string, requestKey: string): string {
   return `forge-checkout-${userId}-${requestKey}`;
+}
+function buildCreditIdempotencyKey(userId: string, requestKey: string): string {
+  return `forge-credit-topup-${userId}-${requestKey}`;
 }
 function generateIntegrationIdentifier(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
@@ -133,6 +155,18 @@ function validatePrice(price: Stripe.Price | null | undefined, planKey: string):
   const product = typeof price.product === 'string' ? null : price.product;
   if (!product || !product.metadata) return false;
   return product.metadata.forge_plan_key === planKey;
+}
+/* One-time price validation for credit top-ups. Rejects recurring prices. */
+function validateCreditPrice(price: Stripe.Price | null | undefined, expectedCredits: number): price is Stripe.Price {
+  if (!price) return false;
+  if (!price.active) return false;
+  if (price.type !== 'one_time') return false;
+  if (price.currency !== 'gbp') return false;
+  const product = typeof price.product === 'string' ? null : price.product;
+  if (!product || !product.metadata) return false;
+  if (product.metadata.forge_purchase_type !== 'credit_topup') return false;
+  const amount = Number(product.metadata.forge_credit_amount);
+  return Number.isFinite(amount) && amount === expectedCredits;
 }
 
 function corsHeaders(req: Request) {
@@ -201,11 +235,14 @@ async function resolvePrice(stripe: Stripe, planKey: string, interval: BillingIn
   return prices.data[0] ?? null;
 }
 
+async function resolveCreditPrice(stripe: Stripe, lookupKey: string): Promise<Stripe.Price | null> {
+  const prices = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1, expand: ['data.product'] });
+  return prices.data[0] ?? null;
+}
+
 /* Stripe-authoritative guard: returns true if the customer already has a
    subscription in a blocking status. `canceled` and `incomplete_expired` are
-   terminal and do NOT block (the user may start a fresh subscription).
-   A subscription scheduled for cancellation (`cancel_at_period_end`) still
-   carries status `active`, so it is correctly treated as blocking here. */
+   terminal and do NOT block (the user may start a fresh subscription). */
 async function hasBlockingSubscription(stripe: Stripe, customerId: string): Promise<boolean> {
   const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
   return subscriptions.data.some((sub) => BLOCKING_SUBSCRIPTION_STATUSES.has(sub.status));
@@ -255,7 +292,69 @@ async function handle(req: Request, requestId: string, cors: Record<string, stri
     }
   }
 
-  /* ── Hosted checkout ── */
+  /* ── AI credit top-up (one-time payment, NOT a subscription) ── */
+  if (action === 'credit_topup') {
+    const packKey = body.packKey;
+    if (!isValidCreditPack(packKey)) return fail(requestId, 'INVALID_PACK', 'Unknown credit pack.', 400, cors);
+    const pack = CREDIT_PACKS[packKey];
+
+    const requestKey = body.requestKey;
+    if (!isValidUuid(requestKey)) return fail(requestId, 'INVALID_REQUEST_KEY', 'requestKey must be a valid UUID.', 400, cors);
+
+    let customerId: string;
+    try {
+      customerId = await getOrCreateCustomer(stripe, admin, userId, email);
+    } catch {
+      return fail(requestId, 'STRIPE_ERROR', 'Could not prepare billing.', 502, cors);
+    }
+
+    let price: Stripe.Price | null;
+    try {
+      price = await resolveCreditPrice(stripe, pack.lookupKey);
+    } catch {
+      return fail(requestId, 'STRIPE_ERROR', 'Could not resolve credit pricing.', 502, cors);
+    }
+    if (!validateCreditPrice(price, pack.credits)) {
+      return fail(requestId, 'PRICE_NOT_CONFIGURED', 'No valid one-time GBP credit price is configured.', 503, cors);
+    }
+
+    const idempotencyKey = buildCreditIdempotencyKey(userId, requestKey);
+    const creditSuccessUrl = `${returnBase}/credits?purchase=processing`;
+    const creditCancelUrl = `${returnBase}/credits?purchase=cancelled`;
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'payment',
+      customer: customerId,
+      line_items: [{ price: price.id, quantity: 1 }],
+      client_reference_id: userId,
+      metadata: {
+        forge_user_id: userId,
+        forge_purchase_type: 'credit_topup',
+        forge_credit_pack: packKey,
+        forge_credit_amount: String(pack.credits),
+      },
+      payment_intent_data: {
+        metadata: {
+          forge_user_id: userId,
+          forge_purchase_type: 'credit_topup',
+          forge_credit_pack: packKey,
+          forge_credit_amount: String(pack.credits),
+        },
+      },
+      success_url: creditSuccessUrl,
+      cancel_url: creditCancelUrl,
+    };
+    if (ENABLE_AUTOMATIC_TAX) sessionParams.automatic_tax = { enabled: true };
+
+    try {
+      const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+      return json({ requestId, code: 'OK', url: session.url }, 200, cors);
+    } catch {
+      return fail(requestId, 'CHECKOUT_UNAVAILABLE', 'Could not start credit checkout.', 502, cors);
+    }
+  }
+
+  /* ── Hosted checkout (subscription) ── */
   const planKey = body.planKey;
   const billingInterval = isValidInterval(body.billingInterval) ? body.billingInterval : null;
 
