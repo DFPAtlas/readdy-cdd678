@@ -5,7 +5,8 @@ import { getSupabaseClient } from '@/services/supabaseClient';
 // Only the fields that genuinely exist are exposed:
 //   - identity (email, id, created_at) from Supabase Auth
 //   - display_name / initials / avatar_url from the `profiles` row
-//   - plan_key / status from the `subscriptions` row (may be empty)
+//   - effective plan state from the authoritative `resolve_effective_plan`
+//     RPC (never an arbitrary subscription row)
 // Email is read-only: it is owned by the auth provider, not Forge.
 // ------------------------------------------------------------
 
@@ -19,6 +20,11 @@ export interface ProfileData {
   accountCreatedAt: string | null;
   planKey: string | null;
   planStatus: string | null;
+  paidAccess: boolean;
+  billingConflict: boolean;
+  planPeriodEnd: string | null;
+  nextPlan: string | null;
+  planVerified: boolean;
 }
 
 export function createEmptyProfileData(): ProfileData {
@@ -32,6 +38,11 @@ export function createEmptyProfileData(): ProfileData {
     accountCreatedAt: null,
     planKey: null,
     planStatus: null,
+    paidAccess: false,
+    billingConflict: false,
+    planPeriodEnd: null,
+    nextPlan: null,
+    planVerified: false,
   };
 }
 
@@ -57,21 +68,29 @@ export async function fetchProfile(): Promise<ProfileData> {
   if (authError || !authData.user) return createEmptyProfileData();
   const user = authData.user;
 
-  const [profileResult, subResult] = await Promise.all([
+  const [profileResult, planResult] = await Promise.all([
     supabase
       .from('profiles')
       .select('display_name, initials, avatar_url, created_at')
       .eq('id', user.id)
       .maybeSingle(),
-    supabase
-      .from('subscriptions')
-      .select('plan_key, status')
-      .eq('user_id', user.id)
-      .maybeSingle(),
+    supabase.rpc('resolve_effective_plan', { p_user_id: user.id }),
   ]);
 
   const profile = profileResult.data ?? null;
-  const subscription = subResult.data ?? null;
+
+  // Authoritative effective plan. A lookup failure is NOT proof of a free
+  // account — surface `planKey: null` so the UI can show "Unable to verify".
+  const effectivePlan = planResult.error
+    ? null
+    : (planResult.data as Record<string, unknown> | null);
+
+  const planVerified = !planResult.error && Boolean(planResult.data);
+
+  const planKey = effectivePlan?.plan_key ? String(effectivePlan.plan_key) : null;
+  const planStatus = effectivePlan?.subscription_status
+    ? String(effectivePlan.subscription_status)
+    : null;
 
   const displayName =
     (profile?.display_name ? String(profile.display_name) : null) ??
@@ -91,8 +110,13 @@ export async function fetchProfile(): Promise<ProfileData> {
     accountCreatedAt:
       (profile?.created_at ? String(profile.created_at) : null) ??
       (user.created_at ? String(user.created_at) : null),
-    planKey: subscription?.plan_key ? String(subscription.plan_key) : null,
-    planStatus: subscription?.status ? String(subscription.status) : null,
+    planKey,
+    planStatus,
+    paidAccess: effectivePlan?.paid_access === true,
+    billingConflict: effectivePlan?.billing_conflict === true,
+    planPeriodEnd: effectivePlan?.period_end ? String(effectivePlan.period_end) : null,
+    nextPlan: effectivePlan?.next_plan ? String(effectivePlan.next_plan) : null,
+    planVerified,
   };
 }
 

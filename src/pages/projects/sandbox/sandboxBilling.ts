@@ -73,6 +73,7 @@ export type UsageSummary = {
   cancelAtPeriodEnd: boolean;
   trialEnd: string | null;
   billingEmail: string | null;
+  billingConflict: boolean;
   pricingConfigured: boolean;
   isAdmin: boolean;
   meters: Meter[];
@@ -179,6 +180,8 @@ export function checkoutErrorMessage(code: string | null | undefined, fallback?:
       return 'This plan\u2019s pricing isn\u2019t available yet. Please try again shortly.';
     case 'ACTIVE_SUBSCRIPTION':
       return 'You already have an active subscription.';
+    case 'ACTIVE_SUBSCRIPTION_EXISTS':
+      return 'You already have an active Forge subscription.';
     case 'CHECKOUT_UNAVAILABLE':
       return 'We couldn\u2019t connect to the secure checkout service.';
     case 'CONFIGURATION_ERROR':
@@ -197,15 +200,40 @@ export function checkoutErrorMessage(code: string | null | undefined, fallback?:
   }
 }
 
-function parseCheckoutErrorContext(error: unknown): { errorCode: string | null; message: string | null } {
+async function parseCheckoutErrorContext(
+  error: unknown,
+): Promise<{ errorCode: string | null; message: string | null; status: number | null }> {
   try {
-    if (!error || typeof error !== 'object') return { errorCode: null, message: null };
+    if (!error || typeof error !== 'object') return { errorCode: null, message: null, status: null };
     const record = error as Record<string, unknown>;
+    let status: number | null = null;
 
-    // supabase-js FunctionsHttpError carries the response body in `.context`
-    // (parsed JSON in most versions, a JSON string in a few). Cover alternate
-    // nesting shapes too so a categorized error always surfaces instead of
-    // collapsing into a generic "couldn't connect" message.
+    // supabase-js FunctionsHttpError carries the response body in `.context`.
+    // In current versions `.context` is a browser `Response` (not plain JSON),
+    // so it must be read asynchronously via `.json()`. Without this the 409
+    // body (`ACTIVE_SUBSCRIPTION_EXISTS`) is dropped and the error collapses
+    // into a generic "couldn't connect" message.
+    const context = record.context;
+    if (context && typeof context === 'object' && typeof (context as Response).json === 'function') {
+      const response = context as Response;
+      status = response.status || null;
+      try {
+        const payload = await response.clone().json();
+        if (payload && typeof payload === 'object') {
+          const body = payload as Record<string, unknown>;
+          return {
+            errorCode: typeof body.errorCode === 'string' ? body.errorCode : null,
+            message: typeof body.message === 'string' ? body.message : null,
+            status,
+          };
+        }
+      } catch {
+        /* fall through to legacy parsing */
+      }
+    }
+
+    // Legacy fallback: `.context`/`.body`/`.details` may already be parsed
+    // JSON or a JSON string in a few supabase-js versions.
     const candidates: unknown[] = [record.context, record.body, record.details].filter((c) => c != null);
 
     for (const candidate of candidates) {
@@ -217,17 +245,17 @@ function parseCheckoutErrorContext(error: unknown): { errorCode: string | null; 
         const ctx = parsed as Record<string, unknown>;
         const errorCode = typeof ctx.errorCode === 'string' ? ctx.errorCode : null;
         const message = typeof ctx.message === 'string' ? ctx.message : null;
-        if (errorCode || message) return { errorCode, message };
+        if (errorCode || message) return { errorCode, message, status };
       }
     }
 
     const directCode = typeof record.errorCode === 'string' ? record.errorCode : null;
     const directMessage = typeof record.message === 'string' ? record.message : null;
-    return { errorCode: directCode, message: directMessage };
+    return { errorCode: directCode, message: directMessage, status };
   } catch {
     /* ignore malformed context */
   }
-  return { errorCode: null, message: null };
+  return { errorCode: null, message: null, status: null };
 }
 
 /* The browser's real serving origin + base path, so Stripe redirects the
@@ -257,11 +285,10 @@ export async function createHostedCheckoutSession(
     if (error) {
       // Non-2xx response (e.g. 401 / 409 / 503). Surface the server's
       // errorCode when present without leaking raw Stripe internals.
-      const { errorCode, message } = parseCheckoutErrorContext(error);
+      const { errorCode, message, status } = await parseCheckoutErrorContext(error);
       const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
-      const status = typeof (error as Record<string, unknown>)?.status === 'number'
-        ? String((error as Record<string, unknown>).status) : 'n/a';
-      const diagnostic = `invoke-error code=${code} status=${status} name=${(error as { name?: string })?.name ?? 'n/a'} msg=${message ?? (error as { message?: string })?.message ?? 'n/a'}`;
+      const statusLabel = status != null ? String(status) : 'n/a';
+      const diagnostic = `invoke-error code=${code} status=${statusLabel} name=${(error as { name?: string })?.name ?? 'n/a'} msg=${message ?? (error as { message?: string })?.message ?? 'n/a'}`;
       return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message), diagnostic };
     }
 
@@ -278,7 +305,7 @@ export async function createHostedCheckoutSession(
 
     return { ok: false, errorCode: 'CHECKOUT_UNAVAILABLE', message: checkoutErrorMessage('CHECKOUT_UNAVAILABLE'), diagnostic: `empty-response data=${JSON.stringify(data)?.slice(0, 200) ?? 'null'}` };
   } catch (err) {
-    const { errorCode, message } = parseCheckoutErrorContext(err);
+    const { errorCode, message } = await parseCheckoutErrorContext(err);
     const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
     const diagnostic = `throw code=${code} name=${(err as { name?: string })?.name ?? 'n/a'} msg=${(err as { message?: string })?.message ?? 'n/a'}`;
     return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message), diagnostic };
@@ -294,7 +321,7 @@ export async function openBillingPortal(): Promise<CheckoutResult> {
   try {
     const { data, error } = await supabase.functions.invoke('forge-create-checkout', { body: { action: 'portal', returnBase: appReturnBase() } });
     if (error) {
-      const { errorCode, message } = parseCheckoutErrorContext(error);
+      const { errorCode, message } = await parseCheckoutErrorContext(error);
       const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
       return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message) };
     }
@@ -308,7 +335,7 @@ export async function openBillingPortal(): Promise<CheckoutResult> {
     }
     return { ok: false, errorCode: 'CHECKOUT_UNAVAILABLE', message: checkoutErrorMessage('CHECKOUT_UNAVAILABLE') };
   } catch (err) {
-    const { errorCode, message } = parseCheckoutErrorContext(err);
+    const { errorCode, message } = await parseCheckoutErrorContext(err);
     const code = errorCode ?? 'CHECKOUT_UNAVAILABLE';
     return { ok: false, errorCode: code, message: checkoutErrorMessage(code, message) };
   }

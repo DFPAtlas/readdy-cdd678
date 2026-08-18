@@ -7,7 +7,7 @@ function capitalize(value: string): string {
 }
 
 function prettifyPlan(key: string | null, status: string | null): string {
-  if (!key) return 'Free plan';
+  if (!key) return 'Unable to verify';
   const pretty = capitalize(key);
   if (status === 'trialing') return `${pretty} plan (trial)`;
   if (status === 'past_due') return `${pretty} plan (past due)`;
@@ -75,10 +75,27 @@ export function ForgeStatus({ data }: ForgeStatusProps) {
             </dd>
           </div>
 
+          {data.billingConflict && (
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-xs text-forge-text-muted">Billing</dt>
+              <dd className="text-xs text-forge-amber text-right">Billing conflict</dd>
+            </div>
+          )}
+
           <div className="flex items-center justify-end">
-            <Link to="/pricing" className="text-xs text-forge-amber hover:text-forge-amber/80 transition-colors">
-              Manage plan
-            </Link>
+            {data.planKey === null ? (
+              <Link to="/settings/billing" className="text-xs text-forge-amber hover:text-forge-amber/80 transition-colors">
+                Billing settings
+              </Link>
+            ) : data.paidAccess ? (
+              <Link to="/settings/billing" className="text-xs text-forge-amber hover:text-forge-amber/80 transition-colors">
+                Manage billing
+              </Link>
+            ) : (
+              <Link to="/pricing" className="text-xs text-forge-amber hover:text-forge-amber/80 transition-colors">
+                View pricing
+              </Link>
+            )}
           </div>
         </dl>
       </Card>

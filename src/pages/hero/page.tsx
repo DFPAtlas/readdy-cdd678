@@ -184,6 +184,7 @@ export default function HeroPage() {
               <Link to="/help?topic=privacy" className="hover:text-white/50 transition-colors cursor-pointer">Privacy</Link>
               <Link to="/help?topic=terms" className="hover:text-white/50 transition-colors cursor-pointer">Terms</Link>
               <Link to="/help" className="hover:text-white/50 transition-colors cursor-pointer">Documentation</Link>
+              <Link to="/forge-admin/login" className="hover:text-white/50 transition-colors cursor-pointer">Admin login</Link>
             </div>
           </div>
         </div>

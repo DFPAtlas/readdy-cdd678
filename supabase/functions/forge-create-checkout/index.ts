@@ -14,6 +14,14 @@ import Stripe from 'npm:stripe@22';
      a CORS response, never a bare platform 503 that kills preflight.
    • Authentication is done manually from the JWT (verify_jwt = false).
 
+   Single-subscription guard (the billing-hardening fix):
+   • Stripe is authoritative for whether another billable subscription
+     already exists. Supabase is NEVER trusted for this (it can lag Stripe).
+   • Sequence: authenticated user → billing_customers lookup → create
+     Stripe customer only if none → retrieve Stripe subscriptions → evaluate
+     blocking status → ONLY if none, resolve Price → create Checkout Session.
+   • Never create a second Stripe customer to bypass the guard.
+
    Return-URL contract (the redirect-loop fix):
    • The browser sends `returnBase` (its real `location.origin` + base path)
      so Stripe success/cancel/portal URLs always point back to the exact
@@ -32,6 +40,11 @@ const ENABLE_AUTOMATIC_TAX = Deno.env.get('FORGE_ENABLE_AUTOMATIC_TAX') === 'tru
 
 const BILLABLE_PLAN_KEYS = ['starter', 'builder', 'pro', 'agency'] as const;
 type BillingInterval = 'month' | 'year';
+
+/* Subscription statuses that block creating another billable subscription.
+   Stripe is authoritative — these are checked live against the customer's
+   Stripe subscriptions, never trusted from Supabase or the frontend. */
+const BLOCKING_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'incomplete']);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INTEGRATION_PREFIX = 'forge';
@@ -188,6 +201,16 @@ async function resolvePrice(stripe: Stripe, planKey: string, interval: BillingIn
   return prices.data[0] ?? null;
 }
 
+/* Stripe-authoritative guard: returns true if the customer already has a
+   subscription in a blocking status. `canceled` and `incomplete_expired` are
+   terminal and do NOT block (the user may start a fresh subscription).
+   A subscription scheduled for cancellation (`cancel_at_period_end`) still
+   carries status `active`, so it is correctly treated as blocking here. */
+async function hasBlockingSubscription(stripe: Stripe, customerId: string): Promise<boolean> {
+  const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
+  return subscriptions.data.some((sub) => BLOCKING_SUBSCRIPTION_STATUSES.has(sub.status));
+}
+
 async function handle(req: Request, requestId: string, cors: Record<string, string>): Promise<Response> {
   if (req.method !== 'POST') return fail(requestId, 'INVALID_REQUEST', 'Method not allowed', 405, cors);
 
@@ -242,11 +265,29 @@ async function handle(req: Request, requestId: string, cors: Record<string, stri
   const requestKey = body.requestKey;
   if (!isValidUuid(requestKey)) return fail(requestId, 'INVALID_REQUEST_KEY', 'requestKey must be a valid UUID.', 400, cors);
 
-  const { data: activeSub } = await admin
-    .from('subscriptions').select('id').eq('user_id', userId)
-    .in('status', ['active', 'trialing', 'past_due']).maybeSingle();
-  if (activeSub) {
-    return fail(requestId, 'ACTIVE_SUBSCRIPTION', 'You already have an active subscription. Use Manage billing to change plans.', 409, cors);
+  // Stripe customer first — one Forge user maps to one Stripe customer.
+  // Never create a second customer to bypass the subscription guard.
+  let customerId: string;
+  try {
+    customerId = await getOrCreateCustomer(stripe, admin, userId, email);
+  } catch {
+    return fail(requestId, 'STRIPE_ERROR', 'Could not prepare billing.', 502, cors);
+  }
+
+  // Stripe is authoritative for whether another billable subscription exists.
+  // Supabase can lag Stripe, so never rely on public.subscriptions here.
+  let alreadySubscribed = false;
+  try {
+    alreadySubscribed = await hasBlockingSubscription(stripe, customerId);
+  } catch {
+    return fail(requestId, 'STRIPE_ERROR', 'Could not verify your current subscription.', 502, cors);
+  }
+  if (alreadySubscribed) {
+    return json({
+      requestId, code: 'ERROR', errorCode: 'ACTIVE_SUBSCRIPTION_EXISTS',
+      message: 'You already have an active Forge subscription.',
+      manageBilling: true,
+    }, 409, cors);
   }
 
   let price: Stripe.Price | null;
@@ -257,13 +298,6 @@ async function handle(req: Request, requestId: string, cors: Record<string, stri
   }
   if (!validatePrice(price, planKey)) {
     return fail(requestId, 'PRICE_NOT_CONFIGURED', 'No valid recurring GBP price is configured for this plan.', 503, cors);
-  }
-
-  let customerId: string;
-  try {
-    customerId = await getOrCreateCustomer(stripe, admin, userId, email);
-  } catch {
-    return fail(requestId, 'STRIPE_ERROR', 'Could not prepare billing.', 502, cors);
   }
 
   const idempotencyKey = buildIdempotencyKey(userId, requestKey);

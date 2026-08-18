@@ -44,14 +44,31 @@ function monthlyMrrFor(planKey: string | null | undefined, interval: string | nu
   return interval === 'year' ? (price * 10) / 12 : price;
 }
 
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+
+  if (
+    origin === 'https://theforges.org' ||
+    origin === 'https://www.theforges.org'
+  ) return true;
+
+  if (/^https:\/\/[^/]*readdy\.ai$/.test(origin)) return true;
+
+  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
+
+  return false;
+}
+
 function corsHeaders(req: Request) {
   const origin = req.headers.get('origin');
-  const allowed = /^https:\/\/[^/]*readdy\.ai$/.test(origin ?? '') || /^https?:\/\/localhost(:\d+)?$/.test(origin ?? '');
+  const allowed = isAllowedOrigin(origin);
   return {
     'Access-Control-Allow-Origin': allowed ? (origin ?? '') : '',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
     'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
   };
 }
 
@@ -101,22 +118,24 @@ async function audit(admin: ReturnType<typeof createClient>, ctx: AdminCtx, acti
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   const cors = corsHeaders(req);
+  const err = (errorCode: string, message: string, status = 400) =>
+    json({ requestId, code: 'ERROR', errorCode, message }, status, cors);
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-  if (req.method !== 'POST') return error(requestId, 'INVALID_REQUEST', 'Method not allowed', 405);
+  if (req.method !== 'POST') return err('INVALID_REQUEST', 'Method not allowed', 405);
 
   const userId = await getUserId(req.headers.get('authorization'));
-  if (!userId) return error(requestId, 'AUTH_REQUIRED', 'Authentication required', 401);
+  if (!userId) return err('AUTH_REQUIRED', 'Authentication required', 401);
 
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return error(requestId, 'INVALID_REQUEST', 'Malformed JSON', 400); }
+  try { body = await req.json(); } catch { return err('INVALID_REQUEST', 'Malformed JSON', 400); }
   const action = typeof body.action === 'string' ? body.action : 'whoami';
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const ctx = await resolveAdmin(admin, userId);
-  if (!ctx) return error(requestId, 'FORBIDDEN', 'You do not have admin access', 403);
+  if (!ctx) return err('FORBIDDEN', 'You do not have admin access', 403);
 
   const gate = (perm: string) => {
-    if (!hasPerm(ctx, perm)) return error(requestId, 'FORBIDDEN', 'You do not have permission for this action', 403);
+    if (!hasPerm(ctx, perm)) return err('FORBIDDEN', 'You do not have permission for this action', 403);
     return null;
   };
 
@@ -308,9 +327,9 @@ serve(async (req) => {
   if (action === 'builds.get') {
     const g = gate('dashboard.read'); if (g) return g;
     const buildId = typeof body.buildId === 'string' ? body.buildId : '';
-    if (!buildId) return error(requestId, 'INVALID_INPUT', 'buildId is required', 400);
+    if (!buildId) return err('INVALID_INPUT', 'buildId is required', 400);
     const { data: b } = await admin.from('builds').select('*').eq('id', buildId).maybeSingle();
-    if (!b) return error(requestId, 'NOT_FOUND', 'Build not found', 404);
+    if (!b) return err('NOT_FOUND', 'Build not found', 404);
 
     const { data: p } = await admin.from('projects').select('name, workspace_id').eq('id', b.project_id).maybeSingle();
     let ownerEmail: string | null = null;
@@ -357,9 +376,9 @@ serve(async (req) => {
     const g = gate('users.suspend'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!targetId || !reason) return error(requestId, 'INVALID_INPUT', 'userId and reason are required', 400);
+    if (!targetId || !reason) return err('INVALID_INPUT', 'userId and reason are required', 400);
     const { error: banError } = await admin.auth.admin.updateUserById(targetId, { ban_duration: '8760h' });
-    if (banError) return error(requestId, 'SUSPEND_FAILED', 'Could not suspend account', 500);
+    if (banError) return err('SUSPEND_FAILED', 'Could not suspend account', 500);
     await audit(admin, ctx, 'user.suspended', 'user', targetId, reason, null);
     return json({ requestId, code: 'OK', message: 'Account suspended.' }, 200, cors);
   }
@@ -368,9 +387,9 @@ serve(async (req) => {
     const g = gate('users.suspend'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
     const reason = typeof body.reason === 'string' ? body.reason : 'Restored';
-    if (!targetId) return error(requestId, 'INVALID_INPUT', 'userId is required', 400);
+    if (!targetId) return err('INVALID_INPUT', 'userId is required', 400);
     const { error: banError } = await admin.auth.admin.updateUserById(targetId, { ban_duration: 'none' });
-    if (banError) return error(requestId, 'RESTORE_FAILED', 'Could not restore account', 500);
+    if (banError) return err('RESTORE_FAILED', 'Could not restore account', 500);
     await audit(admin, ctx, 'user.restored', 'user', targetId, reason, null);
     return json({ requestId, code: 'OK', message: 'Account restored.' }, 200, cors);
   }
@@ -378,9 +397,9 @@ serve(async (req) => {
   if (action === 'users.revoke_sessions') {
     const g = gate('users.manage'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
-    if (!targetId) return error(requestId, 'INVALID_INPUT', 'userId is required', 400);
+    if (!targetId) return err('INVALID_INPUT', 'userId is required', 400);
     const { error: sErr } = await admin.auth.admin.signOut(targetId, 'all');
-    if (sErr) return error(requestId, 'REVOKE_FAILED', 'Could not revoke sessions', 500);
+    if (sErr) return err('REVOKE_FAILED', 'Could not revoke sessions', 500);
     await audit(admin, ctx, 'user.sessions_revoked', 'user', targetId, typeof body.reason === 'string' ? body.reason : null, null);
     return json({ requestId, code: 'OK', message: 'Sessions revoked.' }, 200, cors);
   }
@@ -388,11 +407,11 @@ serve(async (req) => {
   if (action === 'users.reset_password') {
     const g = gate('users.manage'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
-    if (!targetId) return error(requestId, 'INVALID_INPUT', 'userId is required', 400);
+    if (!targetId) return err('INVALID_INPUT', 'userId is required', 400);
     const { data: profile } = await admin.from('profiles').select('email').eq('id', targetId).maybeSingle();
-    if (!profile?.email) return error(requestId, 'NO_EMAIL', 'User has no email on record', 400);
+    if (!profile?.email) return err('NO_EMAIL', 'User has no email on record', 400);
     const { error: linkErr } = await admin.auth.admin.generateLink({ type: 'recovery', email: profile.email });
-    if (linkErr) return error(requestId, 'RESET_FAILED', 'Password reset requires a configured email provider', 501);
+    if (linkErr) return err('RESET_FAILED', 'Password reset requires a configured email provider', 501);
     await audit(admin, ctx, 'user.password_reset_requested', 'user', targetId, null, null);
     return json({ requestId, code: 'OK', message: 'Password reset email sent.' }, 200, cors);
   }
@@ -401,7 +420,7 @@ serve(async (req) => {
     const g = gate('users.manage'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
     const note = typeof body.note === 'string' ? body.note : '';
-    if (!targetId || !note) return error(requestId, 'INVALID_INPUT', 'userId and note are required', 400);
+    if (!targetId || !note) return err('INVALID_INPUT', 'userId and note are required', 400);
     await audit(admin, ctx, 'user.support_note', 'user', targetId, note, null);
     return json({ requestId, code: 'OK', message: 'Support note added.' }, 200, cors);
   }
@@ -489,9 +508,9 @@ serve(async (req) => {
   if (action === 'customers.get') {
     const g = gate('users.manage'); if (g) return g;
     const targetId = typeof body.userId === 'string' ? body.userId : '';
-    if (!targetId) return error(requestId, 'INVALID_INPUT', 'userId is required', 400);
+    if (!targetId) return err('INVALID_INPUT', 'userId is required', 400);
     const { data: profile } = await admin.from('profiles').select('id, email, display_name, created_at').eq('id', targetId).maybeSingle();
-    if (!profile) return error(requestId, 'NOT_FOUND', 'Customer not found', 404);
+    if (!profile) return err('NOT_FOUND', 'Customer not found', 404);
 
     const periodStart = new Date(Date.now() - 30 * 86400000).toISOString();
     const [sub, workspaces, usageRows, notes] = await Promise.all([
@@ -626,9 +645,9 @@ serve(async (req) => {
   if (action === 'projects.get') {
     const g = gate('projects.inspect'); if (g) return g;
     const projectId = typeof body.projectId === 'string' ? body.projectId : '';
-    if (!projectId) return error(requestId, 'INVALID_INPUT', 'projectId is required', 400);
+    if (!projectId) return err('INVALID_INPUT', 'projectId is required', 400);
     const { data: p } = await admin.from('projects').select('id, name, slug, status, workspace_id, blueprint, created_at, updated_at').eq('id', projectId).maybeSingle();
-    if (!p) return error(requestId, 'NOT_FOUND', 'Project not found', 404);
+    if (!p) return err('NOT_FOUND', 'Project not found', 404);
 
     const [members, builds, deployments, domains, forms, aiJobs, assets, ws] = await Promise.all([
       admin.from('project_members').select('user_id, role, status').eq('project_id', projectId),
@@ -680,7 +699,7 @@ serve(async (req) => {
     const projectId = typeof body.projectId === 'string' ? body.projectId : '';
     const reason = typeof body.reason === 'string' ? body.reason : '';
     const durationMinutes = Math.min(Math.max(Number(body.durationMinutes) || 30, 1), 480);
-    if (!projectId || !reason) return error(requestId, 'INVALID_INPUT', 'projectId and reason are required', 400);
+    if (!projectId || !reason) return err('INVALID_INPUT', 'projectId and reason are required', 400);
     const expiresAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
     const { data } = await admin.from('support_access_sessions').insert({
       admin_user_id: ctx.userId, project_id: projectId, scope: typeof body.scope === 'string' ? body.scope : 'read-only',
@@ -693,7 +712,7 @@ serve(async (req) => {
   if (action === 'support.end') {
     const g = gate('support.mode'); if (g) return g;
     const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
-    if (!sessionId) return error(requestId, 'INVALID_INPUT', 'sessionId is required', 400);
+    if (!sessionId) return err('INVALID_INPUT', 'sessionId is required', 400);
     await admin.from('support_access_sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', sessionId).eq('admin_user_id', ctx.userId);
     await audit(admin, ctx, 'support.mode_ended', 'support_session', sessionId, null, null);
     return json({ requestId, code: 'OK', message: 'Support mode ended.' }, 200, cors);
@@ -776,8 +795,8 @@ serve(async (req) => {
   if (action === 'billing.replay') {
     const g = gate('billing.operate'); if (g) return g;
     const eventId = typeof body.eventId === 'string' ? body.eventId : '';
-    if (!eventId) return error(requestId, 'INVALID_INPUT', 'eventId is required', 400);
-    if (!Deno.env.get('STRIPE_RESTRICTED_KEY')) return error(requestId, 'NOT_CONFIGURED', 'Stripe is not configured', 501);
+    if (!eventId) return err('INVALID_INPUT', 'eventId is required', 400);
+    if (!Deno.env.get('STRIPE_RESTRICTED_KEY')) return err('NOT_CONFIGURED', 'Stripe is not configured', 501);
     await admin.from('billing_events').update({ processing_status: 'pending', attempt_count: 0 }).eq('id', eventId).eq('processing_status', 'failed');
     await audit(admin, ctx, 'billing.event_replayed', 'billing_event', eventId, typeof body.reason === 'string' ? body.reason : null, null);
     return json({ requestId, code: 'OK', message: 'Event queued for replay.' }, 200, cors);
@@ -785,7 +804,7 @@ serve(async (req) => {
 
   if (action === 'billing.refresh') {
     const g = gate('billing.operate'); if (g) return g;
-    if (!Deno.env.get('STRIPE_RESTRICTED_KEY')) return error(requestId, 'NOT_CONFIGURED', 'Stripe is not configured', 501);
+    if (!Deno.env.get('STRIPE_RESTRICTED_KEY')) return err('NOT_CONFIGURED', 'Stripe is not configured', 501);
     await audit(admin, ctx, 'billing.refresh_requested', 'subscription', typeof body.userId === 'string' ? body.userId : null, null, null);
     return json({ requestId, code: 'OK', message: 'Subscription refresh queued.' }, 200, cors);
   }
@@ -795,7 +814,7 @@ serve(async (req) => {
     const targetUserId = typeof body.userId === 'string' ? body.userId : '';
     const credits = Number(body.credits) || 0;
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!targetUserId || credits <= 0 || !reason) return error(requestId, 'INVALID_INPUT', 'userId, positive credits and reason required', 400);
+    if (!targetUserId || credits <= 0 || !reason) return err('INVALID_INPUT', 'userId, positive credits and reason required', 400);
     await admin.from('usage_ledger').insert({
       user_id: targetUserId, usage_type: 'ai_credit_grant', quantity: credits, status: 'settled',
       idempotency_key: `grant-${crypto.randomUUID()}`, safe_metadata: { reason, granted_by: ctx.userId }, settled_at: new Date().toISOString(),
@@ -958,7 +977,7 @@ serve(async (req) => {
     const g = gate('ai.operate'); if (g) return g;
     const modelId = typeof body.modelId === 'string' ? body.modelId : '';
     const enabled = Boolean(body.enabled);
-    if (!modelId) return error(requestId, 'INVALID_INPUT', 'modelId is required', 400);
+    if (!modelId) return err('INVALID_INPUT', 'modelId is required', 400);
     await admin.from('ai_models').update({ enabled, updated_at: new Date().toISOString() }).eq('id', modelId);
     await audit(admin, ctx, enabled ? 'ai.model_enabled' : 'ai.model_disabled', 'ai_model', modelId, typeof body.reason === 'string' ? body.reason : null, null);
     return json({ requestId, code: 'OK', message: enabled ? 'Model enabled.' : 'Model disabled.' }, 200, cors);
@@ -968,7 +987,7 @@ serve(async (req) => {
     const g = gate('ai.operate'); if (g) return g;
     const providerId = typeof body.providerId === 'string' ? body.providerId : '';
     const status = typeof body.status === 'string' ? body.status : 'disabled';
-    if (!providerId) return error(requestId, 'INVALID_INPUT', 'providerId is required', 400);
+    if (!providerId) return err('INVALID_INPUT', 'providerId is required', 400);
     await admin.from('ai_providers').update({ status, updated_at: new Date().toISOString() }).eq('id', providerId);
     await audit(admin, ctx, `ai.provider_${status}`, 'ai_provider', providerId, typeof body.reason === 'string' ? body.reason : null, null);
     return json({ requestId, code: 'OK', message: `Provider ${status}.` }, 200, cors);
@@ -978,7 +997,7 @@ serve(async (req) => {
     const g = gate('ai.operate'); if (g) return g;
     const modelId = typeof body.modelId === 'string' ? body.modelId : '';
     const priority = Number(body.priority);
-    if (!modelId || Number.isNaN(priority)) return error(requestId, 'INVALID_INPUT', 'modelId and numeric priority required', 400);
+    if (!modelId || Number.isNaN(priority)) return err('INVALID_INPUT', 'modelId and numeric priority required', 400);
     await admin.from('ai_models').update({ routing_priority: priority, updated_at: new Date().toISOString() }).eq('id', modelId);
     await audit(admin, ctx, 'ai.routing_changed', 'ai_model', modelId, null, { priority });
     return json({ requestId, code: 'OK', message: 'Routing priority updated.' }, 200, cors);
@@ -988,7 +1007,7 @@ serve(async (req) => {
     const g = gate('ai.operate'); if (g) return g;
     const flagKey = typeof body.flagKey === 'string' ? body.flagKey : '';
     const enabled = Boolean(body.enabled);
-    if (!['ai_paused', 'local_only'].includes(flagKey)) return error(requestId, 'INVALID_INPUT', 'Unknown AI flag', 400);
+    if (!['ai_paused', 'local_only'].includes(flagKey)) return err('INVALID_INPUT', 'Unknown AI flag', 400);
     await admin.from('feature_flags').upsert({
       flag_key: flagKey, enabled, created_by: ctx.userId, updated_by: ctx.userId,
       configuration: {}, updated_at: new Date().toISOString(),
@@ -1008,7 +1027,7 @@ serve(async (req) => {
     const g = gate('deployments.operate'); if (g) return g;
     const flagKey = typeof body.flagKey === 'string' ? body.flagKey : '';
     const enabled = Boolean(body.enabled);
-    if (!['deploy_paused', 'publish_disabled'].includes(flagKey)) return error(requestId, 'INVALID_INPUT', 'Unknown deployment flag', 400);
+    if (!['deploy_paused', 'publish_disabled'].includes(flagKey)) return err('INVALID_INPUT', 'Unknown deployment flag', 400);
     await admin.from('feature_flags').upsert({
       flag_key: flagKey, enabled, created_by: ctx.userId, updated_by: ctx.userId,
       configuration: {}, updated_at: new Date().toISOString(),
@@ -1021,8 +1040,8 @@ serve(async (req) => {
     const g = gate('deployments.operate'); if (g) return g;
     const deploymentId = typeof body.deploymentId === 'string' ? body.deploymentId : '';
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!deploymentId) return error(requestId, 'INVALID_INPUT', 'deploymentId is required', 400);
-    if (action === 'deployments.rollback' && !reason) return error(requestId, 'INVALID_INPUT', 'Reason required for rollback', 400);
+    if (!deploymentId) return err('INVALID_INPUT', 'deploymentId is required', 400);
+    if (action === 'deployments.rollback' && !reason) return err('INVALID_INPUT', 'Reason required for rollback', 400);
     const op = action.split('.')[1];
     const newStatus = op === 'retry' ? 'queued' : op === 'cancel' ? 'cancelled' : 'queued';
     await admin.from('deployments').update({ status: newStatus }).eq('id', deploymentId);
@@ -1053,8 +1072,8 @@ serve(async (req) => {
     const templateId = typeof body.templateId === 'string' ? body.templateId : '';
     const status = typeof body.status === 'string' ? body.status : '';
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!templateId || !['approved', 'changes_requested', 'rejected', 'suspended', 'retired'].includes(status)) return error(requestId, 'INVALID_INPUT', 'templateId and valid status required', 400);
-    if ((status === 'rejected' || status === 'suspended') && !reason) return error(requestId, 'INVALID_INPUT', 'Reason required for rejection/suspension', 400);
+    if (!templateId || !['approved', 'changes_requested', 'rejected', 'suspended', 'retired'].includes(status)) return err('INVALID_INPUT', 'templateId and valid status required', 400);
+    if ((status === 'rejected' || status === 'suspended') && !reason) return err('INVALID_INPUT', 'Reason required for rejection/suspension', 400);
     await admin.from('templates').update({ moderation_status: status, updated_at: new Date().toISOString() }).eq('id', templateId);
     await admin.from('template_reviews').insert({ template_id: templateId, reviewer_id: ctx.userId, status, findings: reason ? { reason } : {}, created_at: new Date().toISOString(), completed_at: new Date().toISOString() });
     await audit(admin, ctx, `template.${status}`, 'template', templateId, reason, null);
@@ -1072,7 +1091,7 @@ serve(async (req) => {
     const flagKey = typeof body.flagKey === 'string' ? body.flagKey.trim() : '';
     const enabled = Boolean(body.enabled);
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!flagKey) return error(requestId, 'INVALID_INPUT', 'flagKey is required', 400);
+    if (!flagKey) return err('INVALID_INPUT', 'flagKey is required', 400);
     const configuration = (typeof body.configuration === 'object' && body.configuration) ? body.configuration : {};
     await admin.from('feature_flags').upsert({
       flag_key: flagKey, enabled, configuration, created_by: ctx.userId, updated_by: ctx.userId, updated_at: new Date().toISOString(),
@@ -1093,7 +1112,7 @@ serve(async (req) => {
     const enabled = Boolean(body.enabled);
     const reason = typeof body.reason === 'string' ? body.reason : '';
     const validScopes = ['platform', 'ai', 'publishing', 'billing', 'forms', 'templates'];
-    if (!validScopes.includes(scope)) return error(requestId, 'INVALID_INPUT', 'Invalid maintenance scope', 400);
+    if (!validScopes.includes(scope)) return err('INVALID_INPUT', 'Invalid maintenance scope', 400);
     const flagKey = `maintenance.${scope}`;
     await admin.from('feature_flags').upsert({
       flag_key: flagKey, enabled, created_by: ctx.userId, updated_by: ctx.userId,
@@ -1114,7 +1133,7 @@ serve(async (req) => {
     const g = gate('incidents.manage'); if (g) return g;
     const severity = typeof body.severity === 'string' ? body.severity : '';
     const title = typeof body.title === 'string' ? body.title : '';
-    if (!title || !['critical', 'major', 'minor'].includes(severity)) return error(requestId, 'INVALID_INPUT', 'title and valid severity required', 400);
+    if (!title || !['critical', 'major', 'minor'].includes(severity)) return err('INVALID_INPUT', 'title and valid severity required', 400);
     const affected = Array.isArray(body.affectedServices) ? body.affectedServices : [];
     const { data } = await admin.from('platform_incidents').insert({
       severity, title, affected_services: affected, status: 'investigating', incident_lead: ctx.userId, started_at: new Date().toISOString(),
@@ -1129,7 +1148,7 @@ serve(async (req) => {
     const incidentId = typeof body.incidentId === 'string' ? body.incidentId : '';
     const status = typeof body.status === 'string' ? body.status : '';
     const message = typeof body.message === 'string' ? body.message : '';
-    if (!incidentId || !['investigating', 'identified', 'monitoring', 'resolved', 'closed'].includes(status)) return error(requestId, 'INVALID_INPUT', 'incidentId and valid status required', 400);
+    if (!incidentId || !['investigating', 'identified', 'monitoring', 'resolved', 'closed'].includes(status)) return err('INVALID_INPUT', 'incidentId and valid status required', 400);
     const patch: Record<string, unknown> = { status };
     if (status === 'resolved' || status === 'closed') patch.resolved_at = new Date().toISOString();
     await admin.from('platform_incidents').update(patch).eq('id', incidentId);
@@ -1142,8 +1161,8 @@ serve(async (req) => {
     const g = gate(action === 'data.export' ? 'data.export' : 'data.delete'); if (g) return g;
     const targetUserId = typeof body.userId === 'string' ? body.userId : '';
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!targetUserId || !reason) return error(requestId, 'INVALID_INPUT', 'userId and reason are required', 400);
-    if (action === 'data.delete' && !body.confirm) return error(requestId, 'CONFIRM_REQUIRED', 'Deletion requires explicit confirmation', 400);
+    if (!targetUserId || !reason) return err('INVALID_INPUT', 'userId and reason are required', 400);
+    if (action === 'data.delete' && !body.confirm) return err('CONFIRM_REQUIRED', 'Deletion requires explicit confirmation', 400);
     const isDelete = action === 'data.delete';
     const { data: workspaces } = await admin.from('workspaces').select('id').eq('owner_id', targetUserId);
     const wsIds = (workspaces ?? []).map((w: { id: string }) => w.id);
@@ -1219,9 +1238,9 @@ serve(async (req) => {
     const role = typeof body.role === 'string' ? body.role : '';
     const active = Boolean(body.active);
     const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!targetUserId || !ROLES.includes(role as AdminRole)) return error(requestId, 'INVALID_INPUT', 'userId and valid role required', 400);
-    if (!reason) return error(requestId, 'INVALID_INPUT', 'Reason required for admin changes', 400);
-    if (role === 'super_admin' && ctx.role !== 'super_admin') return error(requestId, 'FORBIDDEN', 'Only an Owner can grant Owner access', 403);
+    if (!targetUserId || !ROLES.includes(role as AdminRole)) return err('INVALID_INPUT', 'userId and valid role required', 400);
+    if (!reason) return err('INVALID_INPUT', 'Reason required for admin changes', 400);
+    if (role === 'super_admin' && ctx.role !== 'super_admin') return err('FORBIDDEN', 'Only an Owner can grant Owner access', 403);
 
     const { data: target } = await admin.from('platform_admins').select('role, active').eq('user_id', targetUserId).maybeSingle();
     const { data: all } = await admin.from('platform_admins').select('user_id, role, active');
@@ -1229,7 +1248,7 @@ serve(async (req) => {
     const wasOwner = target?.role === 'super_admin';
     const stillOwner = role === 'super_admin' && active;
     if (wasOwner && !stillOwner && activeOwnerCount <= 1) {
-      return error(requestId, 'LAST_OWNER', 'Cannot remove, demote, or deactivate the last active Owner', 400);
+      return err('LAST_OWNER', 'Cannot remove, demote, or deactivate the last active Owner', 400);
     }
 
     await admin.from('platform_admins').upsert({
@@ -1361,5 +1380,5 @@ serve(async (req) => {
     return json({ requestId, code: 'OK', sessions: data ?? [] }, 200, cors);
   }
 
-  return error(requestId, 'INVALID_ACTION', `Unknown action "${action}"`, 400);
+  return err('INVALID_ACTION', `Unknown action "${action}"`, 400);
 });

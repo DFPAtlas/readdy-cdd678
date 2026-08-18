@@ -52,6 +52,7 @@ import VersionsPage from "@/pages/projects/versions/page";
 import ExportsPage from "@/pages/projects/exports/page";
 import ProjectSettingsPage from "@/pages/projects/settings/page";
 import ForgeAdminPage from "@/pages/admin/page";
+import AdminLogin from "@/pages/admin/AdminLogin";
 import OwnerDashboard from "@/pages/admin/dashboard/OwnerDashboard";
 import SystemPage from "@/pages/admin/SystemPage";
 import UsagePage from "@/pages/admin/UsagePage";
@@ -145,6 +146,7 @@ const routes: RouteObject[] = [
   },
 
   // --- Platform Admin Console (server-authorised, standalone) ---
+  { path: "/forge-admin/login", element: <AdminLogin /> },
   {
     path: "/forge-admin",
     element: <ForgeAdminPage />,

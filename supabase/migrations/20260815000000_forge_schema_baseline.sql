@@ -1957,7 +1957,19 @@ begin
     into v_sub
   from public.subscriptions s
   where s.user_id = p_user_id
-  order by s.created_at desc, s.updated_at desc
+    and (
+      s.status in ('active','trialing','past_due')
+      or (s.status = 'canceled' and s.cancel_at_period_end = true and s.current_period_end is not null and s.current_period_end > now())
+    )
+  order by
+    case s.status
+      when 'active' then 0
+      when 'trialing' then 1
+      when 'past_due' then 2
+      when 'canceled' then 3
+      else 4
+    end,
+    s.created_at desc, s.updated_at desc
   limit 1;
 
   if v_sub is null then
@@ -2242,16 +2254,39 @@ declare
   v_next text := 'starter';
   v_status text := null;
   v_period_end timestamptz := null;
+  v_billable_count int := 0;
+  v_conflict boolean := false;
 begin
   if auth.uid() is not null and auth.uid() is distinct from p_user_id then
     raise exception 'Not authorized for this user';
+  end if;
+
+  select count(*) into v_billable_count
+  from public.subscriptions s
+  where s.user_id = p_user_id
+    and s.status in ('active','trialing','past_due');
+
+  if v_billable_count > 1 then
+    v_conflict := true;
   end if;
 
   select s.plan_key, s.status, s.cancel_at_period_end, s.current_period_end
     into v_sub
   from public.subscriptions s
   where s.user_id = p_user_id
-  order by s.created_at desc, s.updated_at desc
+    and (
+      s.status in ('active','trialing','past_due')
+      or (s.status = 'canceled' and s.cancel_at_period_end = true and s.current_period_end is not null and s.current_period_end > now())
+    )
+  order by
+    case s.status
+      when 'active' then 0
+      when 'trialing' then 1
+      when 'past_due' then 2
+      when 'canceled' then 3
+      else 4
+    end,
+    s.created_at desc, s.updated_at desc
   limit 1;
 
   if v_sub is null then
@@ -2290,7 +2325,8 @@ begin
     'subscription_status', v_status,
     'period_end', v_period_end,
     'reset_date', v_period_end,
-    'next_plan', v_next
+    'next_plan', v_next,
+    'billing_conflict', v_conflict
   );
 end;
 $function$;

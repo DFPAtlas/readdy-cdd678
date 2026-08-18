@@ -48,7 +48,7 @@ const METER_ICONS: Record<string, typeof Zap> = {
   custom_domains: Link2,
 };
 
-const ACTIVE_SUB_STATUSES = ['active', 'trialing', 'past_due'] as const;
+const ACTIVE_SUB_STATUSES = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'] as const;
 const CONFIRM_TIMEOUT_MS = 30000;
 const INTENT_KEY = 'forge_checkout_intent';
 
@@ -321,7 +321,7 @@ export default function PricingPage() {
             let loading = false;
 
             if (hasActiveSubscription) {
-              label = 'Manage billing';
+              label = 'Manage plan';
               disabled = busy !== null;
               loading = busy === 'portal';
             } else if (plan.key === 'free') {

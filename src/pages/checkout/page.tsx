@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Box, CalendarDays, CheckCircle2, HelpCircle, LockKeyhole,
@@ -7,10 +7,15 @@ import {
 import {
   createHostedCheckoutSession, fetchUsageSummary, openBillingPortal,
 } from '@/pages/projects/sandbox/sandboxBilling';
+import { getSupabaseClient } from '@/services/supabaseClient';
 import { useAuthStore } from '@/stores/authStore';
 import './checkout-page.css';
 
 type PaidPlanKey = 'starter' | 'builder' | 'pro' | 'agency';
+
+/* Explicit fail-closed checkout states. Only `clear` may reveal the payment
+   CTA — every other state must NOT render a "Continue to secure payment" button. */
+type CheckoutState = 'checking' | 'clear' | 'subscribed' | 'conflict' | 'unavailable';
 
 /* Approved billing contract — the single source of truth for display.
    Prices here mirror the pricing page and the server-resolved Stripe prices. */
@@ -28,7 +33,7 @@ const PLAN_COPY: Record<PaidPlanKey, {
   agency: { name: 'Agency', monthlyPrice: 249, credits: '16,000 AI credits / month', pages: '250 pages per site', publishing: '100 published sites' },
 };
 
-const ACTIVE_SUB_STATUSES = ['active', 'trialing', 'past_due'];
+const ACTIVE_SUB_STATUSES = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'];
 
 function ForgeCheckoutLogo() {
   return <span className="forge-checkout-logo" aria-label="Forge"><i aria-hidden="true" /><b>Forge</b></span>;
@@ -60,12 +65,12 @@ function openExternal(url: string): void {
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const initialized = useAuthStore((state) => state.initialized);
   const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
 
-  const [checking, setChecking] = useState(true);
-  const [activeSubscription, setActiveSubscription] = useState(false);
+  const [state, setState] = useState<CheckoutState>('checking');
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const [redirecting, setRedirecting] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,40 +90,75 @@ export default function CheckoutPage() {
   const total = plan ? (interval === 'year' ? plan.monthlyPrice * 10 : plan.monthlyPrice) : 0;
   const totalLabel = `£${total.toLocaleString()}`;
   const perLabel = interval === 'year' ? '/year' : '/month';
-  const email = user?.email ?? '';
+  // Authoritative email comes from the verified Supabase user, never a stale
+  // Zustand/local value from a previous account.
+  const email = verifiedEmail || user?.email || '';
+
+  /* Verify the live Supabase identity and load billing state. This is the
+     authoritative reconciliation step — it must complete (and confirm the
+     correct account) before any payment CTA can appear. */
+  const loadCheckout = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setState('unavailable');
+      return;
+    }
+
+    setState('checking');
+    setError(null);
+
+    try {
+      const { data, error: authError } = await supabase.auth.getUser();
+      const verifiedUser = data?.user ?? null;
+
+      if (authError || !verifiedUser) {
+        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`, { replace: true });
+        return;
+      }
+
+      setVerifiedEmail(verifiedUser.email ?? '');
+
+      // Reconcile the store with the live session so the order-review email
+      // and downstream consumers reflect the real signed-in account.
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser?.id !== verifiedUser.id) {
+        setUser({ id: verifiedUser.id, email: verifiedUser.email ?? null });
+      }
+
+      const summary = await fetchUsageSummary();
+      if (!summary) {
+        setState('unavailable');
+        return;
+      }
+      if (summary.billingConflict) {
+        setState('conflict');
+        return;
+      }
+      const status = summary.subscriptionStatus;
+      if (status && ACTIVE_SUB_STATUSES.includes(status as string)) {
+        setState('subscribed');
+      } else {
+        setState('clear');
+      }
+    } catch {
+      setState('unavailable');
+    }
+  }, [navigate, setUser]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
 
-    // Wait for the session to resolve before deciding to redirect — avoids
-    // bouncing an authenticated user to /login on a hard refresh.
+    // Wait for the session to resolve before deciding — avoids bouncing an
+    // authenticated user to /login on a hard refresh.
     if (!initialized) return;
 
-    if (!isAuthenticated) {
-      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`, { replace: true });
-      return;
-    }
     if (!requested.plan || !requested.interval) {
       navigate('/pricing?billing=invalid', { replace: true });
       return;
     }
 
-    let active = true;
-    void fetchUsageSummary()
-      .then((summary) => {
-        if (!active) return;
-        const status = summary?.subscriptionStatus;
-        if (status && ACTIVE_SUB_STATUSES.includes(status as string)) {
-          setActiveSubscription(true);
-        }
-        setChecking(false);
-      })
-      .catch(() => {
-        if (!active) return;
-        setChecking(false);
-      });
-    return () => { active = false; };
-  }, [initialized, isAuthenticated, navigate, requested.interval, requested.plan]);
+    void loadCheckout();
+  }, [initialized, navigate, requested.interval, requested.plan, loadCheckout]);
 
   async function handleContinue(): Promise<void> {
     if (!requested.plan || !requested.interval || redirecting) return;
@@ -131,6 +171,11 @@ export default function CheckoutPage() {
       return;
     }
     setRedirecting(false);
+    if (result.errorCode === 'ACTIVE_SUBSCRIPTION_EXISTS' || result.errorCode === 'ACTIVE_SUBSCRIPTION') {
+      setState('subscribed');
+      setError(null);
+      return;
+    }
     setError(result.message);
     setDiagnostic(result.diagnostic ?? null);
   }
@@ -148,7 +193,7 @@ export default function CheckoutPage() {
     setError(result.message);
   }
 
-  const loading = !initialized || checking;
+  const loading = !initialized || state === 'checking';
 
   return (
     <div className="forge-checkout-page">
@@ -171,19 +216,56 @@ export default function CheckoutPage() {
         <div className="forge-checkout-state"><RefreshCw className="forge-checkout-spin" /><h1>Preparing your order</h1><p>Confirming your Forge plan…</p></div>
       )}
 
-      {!loading && activeSubscription && (
+      {!loading && state === 'subscribed' && (
         <div className="forge-checkout-state">
           <ShieldCheck />
-          <h1>You already have an active subscription</h1>
-          <p>Your Forge plan is already active. Use Manage billing to change or cancel it.</p>
+          <h1>You already have an active Forge subscription.</h1>
+          <p>Your plan is already active. Use Manage billing to change or cancel it.</p>
           {error && <div className="forge-checkout-error" role="alert">{error}</div>}
-          <button type="button" onClick={() => void handleManageBilling()} disabled={portalBusy}>
-            {portalBusy ? 'Opening…' : 'Manage billing'}
-          </button>
+          <div className="forge-checkout-actions">
+            <button type="button" className="primary" onClick={() => void handleManageBilling()} disabled={portalBusy}>
+              {portalBusy ? 'Opening…' : 'Manage billing'}
+            </button>
+            <button type="button" onClick={() => navigate('/dashboard')}>
+              Return to workspace
+            </button>
+          </div>
         </div>
       )}
 
-      {!loading && !activeSubscription && plan && interval && (
+      {!loading && state === 'conflict' && (
+        <div className="forge-checkout-state">
+          <ShieldCheck />
+          <h1>Your billing needs attention.</h1>
+          <p>We found more than one active plan on this account. Please review your billing to continue.</p>
+          <div className="forge-checkout-actions">
+            <button type="button" className="primary" onClick={() => void handleManageBilling()} disabled={portalBusy}>
+              {portalBusy ? 'Opening…' : 'Manage billing'}
+            </button>
+            <button type="button" onClick={() => navigate('/dashboard')}>
+              Return to workspace
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!loading && state === 'unavailable' && (
+        <div className="forge-checkout-state">
+          <RefreshCw />
+          <h1>We couldn&rsquo;t verify your billing status.</h1>
+          <p>Please try again, or return to pricing to review your options.</p>
+          <div className="forge-checkout-actions">
+            <button type="button" className="primary" onClick={() => void loadCheckout()}>
+              Retry
+            </button>
+            <button type="button" onClick={() => navigate('/pricing')}>
+              Return to pricing
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!loading && state === 'clear' && plan && interval && (
         <main className="forge-checkout-shell">
           <section className="forge-checkout-summary" aria-labelledby="checkout-summary-title">
             <h1 id="checkout-summary-title">Review your plan</h1>

@@ -186,8 +186,8 @@ async function applySubscription(sub, session, eventCreatedSec) {
     plan_key: norm.planKey,
     billing_interval: norm.interval,
     status,
-    current_period_start: iso(sub.current_period_start),
-    current_period_end: iso(sub.current_period_end),
+    current_period_start: iso(item?.current_period_start),
+    current_period_end: iso(item?.current_period_end),
     cancel_at_period_end: sub.cancel_at_period_end ?? false,
     trial_end: iso(sub.trial_end),
     stripe_event_created: iso(eventCreatedSec),
@@ -231,6 +231,9 @@ async function applyDeletion(sub, eventCreatedSec) {
   const billingInterval = norm?.interval ?? existing?.billing_interval ?? null;
   if (!planKey) return { ok: false, reason: 'unknown_price' };
 
+  const periodStart = item?.current_period_start ?? null;
+  const periodEnd = item?.current_period_end ?? null;
+
   const { error } = await admin
     .from('subscriptions')
     .upsert(
@@ -242,8 +245,8 @@ async function applyDeletion(sub, eventCreatedSec) {
         plan_key: planKey,
         billing_interval: billingInterval,
         status: 'canceled',
-        current_period_start: iso(sub.current_period_start),
-        current_period_end: iso(sub.current_period_end),
+        current_period_start: iso(periodStart),
+        current_period_end: iso(periodEnd),
         cancel_at_period_end: sub.cancel_at_period_end ?? false,
         trial_end: iso(sub.trial_end),
         stripe_event_created: iso(eventCreatedSec),
@@ -312,10 +315,19 @@ serve(async (req) => {
 
   const rawBody = await req.text();
 
+  const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
   let event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      STRIPE_WEBHOOK_SECRET,
+      undefined,
+      cryptoProvider
+    );
   } catch (err) {
+    console.error('WEBHOOK_SIGNATURE_VERIFY_FAILED', safeError(err));
     return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 

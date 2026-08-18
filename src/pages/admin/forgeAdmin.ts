@@ -238,7 +238,27 @@ async function invoke<T = Record<string, unknown>>(action: string, body: Record<
   if (!supabase) return { ok: false, code: 'NO_CLIENT', message: 'Supabase is not configured.' };
   try {
     const { data, error } = await supabase.functions.invoke('forge-admin', { body: { action, ...body } });
-    if (error) return { ok: false, code: 'INVOKE_ERROR', message: error.message ?? 'Request failed.' };
+    if (error) {
+      // Non-2xx responses surface as a FunctionsHttpError. supabase-js
+      // returns `data: null` in this path — the edge function's own body
+      // is NOT in `data`, it's in `error.context` (the raw HTTP Response).
+      // Parse that body to recover the real errorCode (AUTH_REQUIRED /
+      // FORBIDDEN / ...) so the UI can distinguish "sign in" from
+      // "access denied" from a genuine failure.
+      let code = 'INVOKE_ERROR';
+      let message = error.message ?? 'Request failed.';
+      const context = (error as { context?: Response }).context;
+      if (context) {
+        try {
+          const parsed = (await context.json()) as { errorCode?: string; message?: string } | null;
+          if (parsed?.errorCode) code = parsed.errorCode;
+          if (parsed?.message) message = parsed.message;
+        } catch {
+          // Body wasn't JSON; keep the generic message.
+        }
+      }
+      return { ok: false, code, message };
+    }
     const d = data as { code?: string; errorCode?: string; message?: string } & Record<string, unknown>;
     if (!d || d.code !== 'OK') return { ok: false, code: d?.errorCode ?? 'ERROR', message: d?.message ?? 'Request failed.' };
     return { ok: true, data: d as unknown as T };

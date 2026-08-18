@@ -23,9 +23,16 @@ function ProfileSkeleton() {
   );
 }
 
-function planLabel(planKey: string | null): string {
-  if (!planKey) return 'Free';
+function planLabel(planKey: string | null, verified: boolean): string {
+  if (!verified) return 'Unable to verify';
+  if (!planKey) return 'Unable to verify';
+
   return planKey.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function statusLabel(status: string | null): string {
+  if (!status) return '—';
+  return status.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatDate(value: string | null): string {
@@ -35,7 +42,7 @@ function formatDate(value: string | null): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function ProfileContent({ data }: { data: ProfileData }) {
+function ProfileContent({ data, retry }: { data: ProfileData; retry: () => void }) {
   const navigate = useNavigate();
   const [name, setName] = useState(data.displayName ?? '');
   const [savedName, setSavedName] = useState(data.displayName ?? '');
@@ -180,12 +187,50 @@ function ProfileContent({ data }: { data: ProfileData }) {
           <div className="flex items-center justify-between gap-3">
             <dt className="text-forge-text-muted">Plan</dt>
             <dd className="flex items-center gap-2">
-              <span className="text-forge-text-primary">{planLabel(data.planKey)}</span>
-              <LinkButton to="/pricing" variant="ghost" size="sm" className="!h-6 !px-1.5 text-xs">
-                View pricing
-              </LinkButton>
+              <span className="text-forge-text-primary">{planLabel(data.planKey, data.planVerified)}</span>
+              {data.planKey === null ? (
+                <LinkButton to="/settings/billing" variant="ghost" size="sm" className="!h-6 !px-1.5 text-xs">
+                  Billing settings
+                </LinkButton>
+              ) : data.paidAccess ? (
+                <LinkButton to="/settings/billing" variant="ghost" size="sm" className="!h-6 !px-1.5 text-xs">
+                  Manage billing
+                </LinkButton>
+              ) : (
+                <LinkButton to="/pricing" variant="ghost" size="sm" className="!h-6 !px-1.5 text-xs">
+                  View pricing
+                </LinkButton>
+              )}
             </dd>
           </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-forge-text-muted">Status</dt>
+            <dd className="text-forge-text-primary">{statusLabel(data.planStatus)}</dd>
+          </div>
+          {data.paidAccess && data.planPeriodEnd && (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-forge-text-muted">Renews</dt>
+              <dd className="text-forge-text-primary">{formatDate(data.planPeriodEnd)}</dd>
+            </div>
+          )}
+          {data.planKey === null && (
+            <div className="rounded-md border border-forge-border-subtle bg-forge-panel px-3 py-2.5">
+              <p className="text-xs text-forge-text-muted">
+                We couldn't verify your billing status.
+              </p>
+              <Button size="sm" variant="secondary" onClick={retry} className="mt-2">
+                Retry
+              </Button>
+            </div>
+          )}
+          {data.billingConflict && (
+            <div className="rounded-md border border-forge-amber/30 bg-forge-amber/10 px-3 py-2.5">
+              <p className="text-xs font-medium text-forge-amber">Billing conflict</p>
+              <p className="text-xs text-forge-text-muted mt-1">
+                Multiple billable subscriptions were detected. Review billing.
+              </p>
+            </div>
+          )}
         </dl>
       </Card>
 
@@ -232,5 +277,5 @@ export default function SettingsProfilePage() {
     );
   }
 
-  return <ProfileContent data={data} />;
+  return <ProfileContent data={data} retry={retry} />;
 }

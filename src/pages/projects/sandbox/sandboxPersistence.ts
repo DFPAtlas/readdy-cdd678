@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/services/supabaseClient';
 import { defaultTheme, type ThemeDefinition } from './sandboxTheme';
 
 export type CanvasElementKind =
@@ -413,22 +414,16 @@ function normalizeDocument(value: unknown): SandboxDocument | null {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   Supabase client (singleton)
+   Supabase client — delegates to the canonical app singleton so
+   every module (billing, sandbox, projects, storage, auth) shares
+   ONE Supabase Auth session and ONE storage key. This is what
+   makes multi-tab account switching and sign-out propagate
+   correctly, and prevents a second client from stale-reading a
+   previous authenticated identity.
    ────────────────────────────────────────────────────────────── */
 
-let client: SupabaseClient | null | undefined;
-
-function getClient() {
-  if (client !== undefined) return client;
-
-  const url = (import.meta.env.VITE_PUBLIC_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL) as string | undefined;
-  const key = (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
-  client = url && key ? createClient(url, key) : null;
-  return client;
-}
-
 export function getSandboxClient() {
-  return getClient();
+  return getSupabaseClient();
 }
 
 export type ResolvedSandboxProject = {
@@ -439,7 +434,7 @@ export type ResolvedSandboxProject = {
 };
 
 export async function resolveSandboxProject(): Promise<ResolvedSandboxProject | null> {
-  const supabase = getClient();
+  const supabase = getSupabaseClient();
   if (!supabase) return null;
   try {
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -562,7 +557,7 @@ async function loadCloud(supabase: SupabaseClient): Promise<SandboxDocument | nu
 
 export async function loadSandboxDocument(): Promise<SandboxDocument | null> {
   const local = loadLocal();
-  const supabase = getClient();
+  const supabase = getSupabaseClient();
   if (!supabase) return local;
 
   try {
@@ -581,7 +576,7 @@ export async function loadSandboxDocument(): Promise<SandboxDocument | null> {
 export async function saveSandboxDocument(document: SandboxDocument): Promise<SaveResult> {
   saveLocal(document);
   window.localStorage.removeItem(BACKUP_KEY);
-  const supabase = getClient();
+  const supabase = getSupabaseClient();
   if (!supabase) return { storage: 'local' };
 
   const { data: authData, error: authError } = await supabase.auth.getUser();

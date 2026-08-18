@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { adminApi, type AdminInfo } from './forgeAdmin';
 
 const AdminContext = createContext<AdminInfo | null>(null);
@@ -13,13 +13,14 @@ export function hasPermission(admin: AdminInfo | null, perm: string): boolean {
   return admin.permissions.includes('*') || admin.permissions.includes(perm);
 }
 
-type Status = 'loading' | 'denied' | 'error' | 'ready';
+type Status = 'loading' | 'unauthenticated' | 'denied' | 'error' | 'ready';
 
 export function AdminGuard({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [message, setMessage] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +30,9 @@ export function AdminGuard({ children }: { children: ReactNode }) {
       if (res.ok) {
         setAdmin(res.data.admin);
         setStatus('ready');
-      } else if (res.code === 'FORBIDDEN' || res.code === 'AUTH_REQUIRED') {
+      } else if (res.code === 'AUTH_REQUIRED') {
+        setStatus('unauthenticated');
+      } else if (res.code === 'FORBIDDEN') {
         setMessage(res.message);
         setStatus('denied');
       } else {
@@ -45,6 +48,28 @@ export function AdminGuard({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex flex-col items-center justify-center bg-forge-bg">
         <div className="h-8 w-8 rounded-full border-2 border-forge-border border-t-forge-amber animate-spin" />
         <p className="mt-4 text-sm text-forge-text-muted">Verifying admin access…</p>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-forge-bg px-6 text-center">
+        <div className="h-12 w-12 rounded-lg bg-forge-amber/10 flex items-center justify-center">
+          <i className="ri-user-line text-forge-amber text-xl" />
+        </div>
+        <h1 className="mt-4 text-lg font-semibold text-forge-text-primary">Sign in required</h1>
+        <p className="mt-1 max-w-md text-sm text-forge-text-muted">
+          Sign in to your account to access the admin console.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/forge-admin/login')}
+          className="mt-5 inline-flex items-center gap-2 rounded-md bg-forge-amber px-4 py-2 text-sm font-medium text-forge-text-inverse hover:bg-forge-amber-dim transition-colors cursor-pointer"
+        >
+          <i className="ri-login-box-line" />
+          Sign in
+        </button>
       </div>
     );
   }

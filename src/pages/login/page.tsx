@@ -85,7 +85,20 @@ export default function LoginPage() {
           return;
         }
         const sessionUser = data.session?.user ?? null;
-        if (sessionUser) setUser({ id: sessionUser.id, email: sessionUser.email ?? null });
+        if (!sessionUser) {
+          setError('Your account session could not be verified. Please sign in again.');
+          return;
+        }
+        // Confirm the live session is actually the account that just signed in,
+        // so we never navigate on a stale/previous identity after an account switch.
+        const { data: verified, error: verifyError } = await supabase.auth.getUser();
+        const verifiedUser = verified?.user ?? null;
+        if (verifyError || !verifiedUser || verifiedUser.id !== sessionUser.id) {
+          setError('Your account session could not be verified. Please sign in again.');
+          return;
+        }
+        setUser({ id: verifiedUser.id, email: verifiedUser.email ?? null });
+        navigate(redirectTarget, { replace: true });
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: trimmedEmail,

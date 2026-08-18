@@ -94,7 +94,7 @@ export function OwnerShell() {
     setSigningOut(true);
     const client = getSandboxClient();
     if (client) await client.auth.signOut().catch(() => {});
-    navigate('/login');
+    navigate('/forge-admin/login', { state: { signedOut: true } });
   };
 
   const identity = email ?? (admin ? roleLabel(admin.role) : 'Owner');

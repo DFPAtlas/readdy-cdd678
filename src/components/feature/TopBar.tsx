@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useWorkspaceStore, useProjectStore, useCommandPaletteStore, useSystemStore, useNotificationStore } from '@/stores/index';
+import { getSupabaseClient } from '@/services/supabaseClient';
+import { useAuthStore } from '@/stores/authStore';
 import { StatusDot } from '@/components/ui/StatusChip';
 import { SaveStatus } from '@/components/ui/SaveStatus';
 import { DropdownMenu, DropdownItem, DropdownDivider, DropdownLabel } from '@/components/ui/DropdownMenu';
@@ -26,8 +28,20 @@ export function TopBar({ compact }: TopBarProps) {
   const openCommandPalette = useCommandPaletteStore((s) => s.open);
   const health = useSystemStore((s) => s.health);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const setUser = useAuthStore((s) => s.setUser);
 
   const project = projectId ? demoProjects.find((p) => p.id === projectId) : activeProject;
+
+  const handleSignOut = async () => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
+    // Clear the previous account immediately so no stale email/id can remain
+    // visible after sign-out, even before the auth listener fires.
+    setUser(null);
+    navigate('/login');
+  };
 
   const getOverallStatus = (): 'online' | 'degraded' | 'offline' => {
     if (!health) return 'online';
@@ -241,7 +255,7 @@ export function TopBar({ compact }: TopBarProps) {
         <DropdownItem onClick={() => navigate('/settings')}>Settings</DropdownItem>
         <DropdownDivider />
         <DropdownItem onClick={() => navigate('/help')}>Help</DropdownItem>
-        <DropdownItem onClick={() => {}}>Sign out</DropdownItem>
+        <DropdownItem onClick={handleSignOut}>Sign out</DropdownItem>
       </DropdownMenu>
     </header>
   );

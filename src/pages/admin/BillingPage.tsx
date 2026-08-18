@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi, type BillingSummary, type BillingSubRow, type PaymentProblem } from './forgeAdmin';
 import { useAdmin, hasPermission } from './AdminGuard';
 import { SectionTitle, LoadingState, ErrorState, EmptyState, StatusPill, StatCard, formatDate } from './components';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
 const SUB_STATUS_OPTIONS = ['active', 'trialing', 'past_due', 'cancelled'];
+const BILLABLE_STATUSES = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'];
 
 function fmtMoney(n: number): string {
   return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -41,6 +42,27 @@ export default function BillingPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* Operational visibility only — users with more than one billable
+     subscription. No cancel action is offered here. */
+  const conflicts = useMemo(() => {
+    if (!subs) return [] as { userId: string; customerEmail: string | null; customerName: string | null; stripeCustomerId: string | null; count: number; subscriptions: BillingSubRow[] }[];
+    const byUser: Record<string, BillingSubRow[]> = {};
+    for (const s of subs) {
+      if (!BILLABLE_STATUSES.includes(s.status)) continue;
+      (byUser[s.userId] ??= []).push(s);
+    }
+    return Object.values(byUser)
+      .filter((list) => list.length > 1)
+      .map((list) => ({
+        userId: list[0].userId,
+        customerEmail: list[0].customerEmail,
+        customerName: list[0].customerName,
+        stripeCustomerId: list[0].stripeCustomerId,
+        count: list.length,
+        subscriptions: list,
+      }));
+  }, [subs]);
+
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>, label: string) => {
     setFeedback('');
     const res = await fn();
@@ -70,6 +92,51 @@ export default function BillingPage() {
             MRR calculated from active + past-due recurring subscriptions (yearly normalized to /12), using the plan price list mirrored from the pricing page. It is not derived from invoice history.
           </p>
         </>
+      )}
+
+      {/* Billing conflicts — operational visibility only (no cancel action) */}
+      {conflicts.length > 0 && (
+        <section className="mb-6">
+          <h3 className="text-sm font-semibold text-forge-text-primary mb-2">Billing conflicts</h3>
+          {conflicts.map((c) => (
+            <div key={c.userId} className="rounded-md border border-forge-warning/40 bg-forge-panel p-3 mb-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <i className="ri-alert-line text-forge-warning" />
+                    <span className="text-sm text-forge-text-primary font-medium truncate">{c.customerEmail ?? c.customerName ?? 'Unknown user'}</span>
+                    <span className="text-xs font-semibold text-forge-warning whitespace-nowrap">Billing conflict</span>
+                  </div>
+                  <p className="text-xs text-forge-text-muted mt-1">
+                    Stripe customer <span className="text-forge-text-secondary">{c.stripeCustomerId ?? '—'}</span> · {c.count} billable subscriptions · test environment
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-forge-text-muted">
+                      <th className="py-1 pr-3 font-medium">Subscription</th>
+                      <th className="py-1 pr-3 font-medium">Plan</th>
+                      <th className="py-1 pr-3 font-medium">Status</th>
+                      <th className="py-1 font-medium">Cancel at period end</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.subscriptions.map((s) => (
+                      <tr key={s.id} className="border-t border-forge-border-subtle">
+                        <td className="py-1 pr-3 text-forge-text-secondary">{s.stripeSubscriptionId ?? '—'}</td>
+                        <td className="py-1 pr-3 text-forge-text-primary capitalize">{s.planKey}</td>
+                        <td className="py-1 pr-3 text-forge-text-primary">{s.status}</td>
+                        <td className="py-1">{s.cancelAtPeriodEnd ? <span className="text-forge-warning">Yes</span> : <span className="text-forge-text-muted">No</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </section>
       )}
 
       {/* Payment problems */}

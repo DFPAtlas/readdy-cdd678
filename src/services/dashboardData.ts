@@ -47,6 +47,8 @@ export interface DashboardData {
   configuredProviders: string[];
   planKey: string | null;
   subscriptionStatus: string | null;
+  paidAccess: boolean;
+  billingConflict: boolean;
   activity: DashboardActivity[];
   attention: DashboardAttentionItem[];
 }
@@ -64,6 +66,8 @@ export function createEmptyDashboardData(): DashboardData {
     configuredProviders: [],
     planKey: null,
     subscriptionStatus: null,
+    paidAccess: false,
+    billingConflict: false,
     activity: [],
     attention: [],
   };
@@ -188,17 +192,21 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   if (!aiRows.error) recentAiJobs = aiRows.data ?? [];
   const recentAiCount = aiCount.count ?? 0;
 
-  // Subscription / plan.
+  // Effective plan (authoritative resolver — never an arbitrary subscription row).
   let planKey: string | null = null;
   let subscriptionStatus: string | null = null;
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan_key, status')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (subscription) {
-    planKey = subscription.plan_key;
-    subscriptionStatus = subscription.status;
+  let paidAccess = false;
+  let billingConflict = false;
+  const { data: effectivePlan, error: planError } = await supabase.rpc(
+    'resolve_effective_plan',
+    { p_user_id: userId },
+  );
+  if (!planError && effectivePlan) {
+    const ep = effectivePlan as Record<string, unknown>;
+    planKey = ep.plan_key ? String(ep.plan_key) : null;
+    subscriptionStatus = ep.subscription_status ? String(ep.subscription_status) : null;
+    paidAccess = ep.paid_access === true;
+    billingConflict = ep.billing_conflict === true;
   }
 
   // Configured AI providers.
@@ -343,6 +351,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     configuredProviders,
     planKey,
     subscriptionStatus,
+    paidAccess,
+    billingConflict,
     activity: activity.slice(0, 8),
     attention,
   };
