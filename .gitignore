@@ -29,3 +29,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+# generated locally (not tracked by Readdy)
+auto-imports.d.ts
+package-lock.json
