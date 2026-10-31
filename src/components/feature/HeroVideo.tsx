@@ -4,6 +4,18 @@ import { HERO_CONFIG } from '@/config/hero';
 type VideoState = 'loading' | 'playing' | 'blocked' | 'error';
 
 /**
+ * What the visitor actually sees behind the hero:
+ *   'pending'     — still loading, within the grace period
+ *   'playing'     — the video is on screen
+ *   'unavailable' — reduced motion, autoplay blocked (e.g. iPhone Low Power
+ *                   Mode), load error, or still not playing after the grace period
+ */
+export type HeroVideoStatus = 'pending' | 'playing' | 'unavailable';
+
+/** How long to wait for the video before treating it as unavailable. */
+const GRACE_MS = 3000;
+
+/**
  * Hero background layer.
  *
  * Order of paint (bottom to top):
@@ -11,7 +23,7 @@ type VideoState = 'loading' | 'playing' | 'blocked' | 'error';
  *   2. Video — fades in only once it is actually playing.
  *   3. Soft amber glow — warms the frame so it never reads as flat black.
  */
-export function HeroVideo() {
+export function HeroVideo({ onStatusChange }: { onStatusChange?: (status: HeroVideoStatus) => void } = {}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoState, setVideoState] = useState<VideoState>('loading');
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -79,6 +91,23 @@ export function HeroVideo() {
 
   const videoVisible = !reducedMotion && videoState === 'playing';
 
+  // Treat a video that hasn't started within the grace period as unavailable.
+  const [graceOver, setGraceOver] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setGraceOver(true), GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const status: HeroVideoStatus = videoVisible
+    ? 'playing'
+    : reducedMotion || videoState === 'blocked' || videoState === 'error' || graceOver
+      ? 'unavailable'
+      : 'pending';
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
+
   return (
     <>
       {/* 1. Poster still — always painted underneath, never a black void */}
@@ -86,6 +115,10 @@ export function HeroVideo() {
         <img
           src={HERO_CONFIG.posterSrc}
           alt=""
+          onError={(e) => {
+            // Hide the broken-image icon if the poster host is unreachable.
+            e.currentTarget.style.display = 'none';
+          }}
           className="absolute inset-0 w-full h-full object-cover object-top"
         />
         {/* Warm charcoal wash so the still blends into the dark theme */}
@@ -114,7 +147,7 @@ export function HeroVideo() {
 
       {/* 3. Soft amber glow low in the frame — keeps the hero from reading flat black */}
       <div
-        className="absolute -bottom-40 left-1/2 -translate-x-1/2 w-[760px] h-[460px] rounded-full bg-forge-amber/8 blur-[130px] pointer-events-none"
+        className="absolute -bottom-40 left-1/2 -translate-x-1/2 w-[760px] h-[460px] rounded-full bg-forge-amber/[0.08] blur-[130px] pointer-events-none"
         aria-hidden="true"
       />
     </>

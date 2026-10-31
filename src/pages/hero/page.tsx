@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { PublicHeader } from '@/components/feature/PublicHeader';
-import { HeroVideo } from '@/components/feature/HeroVideo';
+import { useState } from 'react';
+import { HeroVideo, type HeroVideoStatus } from '@/components/feature/HeroVideo';
 import { HeroContent } from '@/components/feature/HeroContent';
 import { WorkflowSteps } from '@/components/feature/WorkflowSteps';
 import { ProductFeatures } from '@/components/feature/ProductFeatures';
@@ -20,6 +21,7 @@ import { MasterAgentPanel } from '@/components/sandbox/MasterAgentPanel';
 import { BuildActivityDrawer } from '@/components/sandbox/BuildActivityDrawer';
 
 export default function HeroPage() {
+  const [videoStatus, setVideoStatus] = useState<HeroVideoStatus>('pending');
   const scrollToSandbox = () => {
     document.querySelector('#sandbox-workspace')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -36,7 +38,7 @@ export default function HeroPage() {
         aria-label="Forge hero"
       >
         {/* Video background */}
-        <HeroVideo />
+        <HeroVideo onStatusChange={setVideoStatus} />
 
         {/* Layered overlay for readability — kept light so the footage stays visible */}
         <div className="absolute inset-0 bg-black/15" aria-hidden="true" />
@@ -50,7 +52,7 @@ export default function HeroPage() {
         />
 
         {/* Hero content */}
-        <HeroContent />
+        <HeroContent videoStatus={videoStatus} />
 
         {/* Scroll indicator */}
         <button
@@ -78,7 +80,7 @@ export default function HeroPage() {
           {/* Section header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
             <div>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-forge-amber/25 bg-forge-amber/8 text-xs font-medium text-forge-amber mb-3">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-forge-amber/25 bg-forge-amber/[0.08] text-xs font-medium text-forge-amber mb-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-forge-amber" aria-hidden="true" />
                 Interactive workspace preview
               </span>
@@ -161,7 +163,7 @@ export default function HeroPage() {
               AI website builder. Your code, your choice of model, your control.
             </p>
           </div>
-          <div className="mt-6 pt-6 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="mt-6 pt-6 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-[11px] text-white/30">
               &copy; {new Date().getFullYear()} Forge. All rights reserved.
             </p>

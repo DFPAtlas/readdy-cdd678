@@ -56,7 +56,7 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
     >
       {/* Ambient amber glow behind logo */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full bg-forge-amber/8 animate-forge-glow"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full bg-forge-amber/[0.08] animate-forge-glow"
         aria-hidden="true"
       />
 
