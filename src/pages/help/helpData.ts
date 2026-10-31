@@ -55,8 +55,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     slug: 'what-is-forge',
     title: 'What is Forge?',
     category: 'getting-started',
-    excerpt: 'Forge is a local-first AI development workspace for planning, building, refining and exporting production-ready websites.',
-    keywords: ['forge', 'overview', 'workspace', 'local-first', 'ai', 'introduction'],
+    excerpt: 'Forge is an AI website builder for planning, building, refining and exporting production-ready websites.',
+    keywords: ['forge', 'overview', 'workspace', 'ownership', 'ai', 'introduction'],
     related: ['create-first-project', 'open-the-sandbox', 'how-forge-ai-works'],
     body: [
       { type: 'paragraph', text: 'Forge is a workspace for planning, building, refining and exporting production-ready websites. It combines an AI assistant — the **Master Agent** — with a visual, drag-and-drop workspace, so you stay in control from the first prompt through to export.' },
@@ -69,7 +69,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         '**Versions** — snapshots of your project that you can review and restore.',
         '**Exports** — portable source code you own and can take anywhere.',
       ] },
-      { type: 'callout', kind: 'note', text: 'Forge is local-first by design. You own the source code you produce and choose which AI providers to use.' },
+      { type: 'callout', kind: 'note', text: 'You own the source code you produce. Export it as a standard static website and host it anywhere.' },
     ],
   },
   {
@@ -660,7 +660,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     related: ['terms', 'account-profile'],
     body: [
       { type: 'callout', kind: 'warning', text: 'The full Forge Privacy Policy has not been finalised yet. The text below is a summary and is not legal advice.' },
-      { type: 'paragraph', text: 'Forge is a local-first development workspace. This page will describe how Forge handles data once the full privacy policy is available.' },
+      { type: 'paragraph', text: 'This page will describe how Forge handles data once the full privacy policy is available.' },
       { type: 'paragraph', text: 'Please check back later for the complete policy.' },
     ],
   },

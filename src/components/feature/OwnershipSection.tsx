@@ -27,27 +27,27 @@ type ControlCard = { icon: LucideIcon; eyebrow: string; title: string; text: str
 const CONTROL_CARDS: ControlCard[] = [
   {
     icon: HardDrive,
-    eyebrow: 'Local-First Architecture',
-    title: 'More control over where AI runs',
-    text: 'Forge is designed to support local-first workflows and configurable AI providers, giving developers more choice over their development environment.',
+    eyebrow: 'Smart Model Routing',
+    title: 'The right model for each job',
+    text: 'Planning and code go to stronger models; copy, SEO and alt text go to faster ones. Forge routes each task automatically and falls back if a provider is down.',
   },
   {
     icon: Cpu,
-    eyebrow: 'Multiple AI Providers',
-    title: 'Choose the right model for the job',
-    text: 'Configure supported providers instead of building your entire workflow around one AI vendor.',
+    eyebrow: 'No Single AI Vendor',
+    title: 'Not tied to one AI company',
+    text: 'Forge works across OpenAI, Anthropic, Google and others, so your projects never depend on one provider staying cheap or online.',
   },
   {
     icon: GitBranch,
     eyebrow: 'Version History',
-    title: 'Move forward without losing the past',
-    text: 'Keep project versions visible so changes can be reviewed and earlier states remain part of the development workflow.',
+    title: 'Undo anything',
+    text: 'Every build is saved as a version. Compare any two side by side and restore an earlier one in a click.',
   },
   {
     icon: Eye,
     eyebrow: 'Visible Development',
-    title: 'Know what Forge is doing',
-    text: 'Tasks, build activity, project structure and files remain visible rather than hiding the development process behind a single prompt box.',
+    title: 'See what the AI is doing',
+    text: 'Watch the plan, the tasks and every file change as they happen, instead of waiting on a prompt box and hoping.',
   },
 ];
 
@@ -93,9 +93,8 @@ export function OwnershipSection() {
             AI development without the lock-in
           </h2>
           <p className="mt-4 text-forge-text-secondary text-sm md:text-base leading-relaxed">
-            Forge is designed around control and portability. Build with AI assistance while
-            keeping visibility over your project, its structure, its versions and the code you take
-            with you.
+            Build with AI and keep full sight of your project: its structure, its versions and the
+            code you take with you.
           </p>
         </div>
 
@@ -107,8 +106,8 @@ export function OwnershipSection() {
               Your code leaves with you
             </h3>
             <p className="mt-3 text-forge-text-secondary text-sm md:text-base leading-relaxed">
-              Forge is built around standard project structures and source-code export, so the end
-              result is your project rather than a page trapped inside a proprietary visual editor.
+              Export a standard static website that runs without Forge. The end result is your
+              project, not a page trapped inside someone else's editor.
             </p>
             <ul className="mt-6 space-y-3">
               {CHECKLIST.map((item) => (

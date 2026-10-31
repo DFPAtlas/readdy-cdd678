@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search, Bell, Moon, Sun, Activity,
@@ -12,7 +13,6 @@ import { SaveStatus } from '@/components/ui/SaveStatus';
 import { DropdownMenu, DropdownItem, DropdownDivider, DropdownLabel } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { NotificationsPopover } from '@/components/feature/NotificationsPopover';
-import { demoProjects } from '@/services/mock/demoData';
 import { KeyboardShortcut } from '@/components/ui/KeyboardShortcut';
 
 interface TopBarProps {
@@ -30,7 +30,28 @@ export function TopBar({ compact }: TopBarProps) {
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const setUser = useAuthStore((s) => s.setUser);
 
-  const project = projectId ? demoProjects.find((p) => p.id === projectId) : activeProject;
+  // Resolve the real project name for the breadcrumb (RLS limits this to projects the user can see).
+  const [projectName, setProjectName] = useState<string | null>(null);
+  useEffect(() => {
+    setProjectName(null);
+    const supabase = getSupabaseClient();
+    if (!projectId || !supabase) return;
+    let cancelled = false;
+    supabase
+      .from('projects')
+      .select('name')
+      .eq('id', projectId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.name) setProjectName(data.name as string);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+  const project = projectId
+    ? projectName ? { name: projectName } : null
+    : activeProject;
 
   const handleSignOut = async () => {
     const supabase = getSupabaseClient();
@@ -43,11 +64,12 @@ export function TopBar({ compact }: TopBarProps) {
     navigate('/login');
   };
 
-  const getOverallStatus = (): 'online' | 'degraded' | 'offline' => {
-    if (!health) return 'online';
-    const statuses = [health.forgeApi.status, health.supabase.status, health.n8n.status, health.previewManager.status, health.ollama.status];
+  const getOverallStatus = (): 'online' | 'degraded' | 'offline' | 'unknown' => {
+    if (!health) return 'unknown';
+    const statuses = [health.auth.status, health.database.status, health.aiGateway.status];
     if (statuses.includes('offline')) return 'offline';
     if (statuses.includes('degraded')) return 'degraded';
+    if (statuses.includes('unknown')) return 'unknown';
     return 'online';
   };
 
@@ -156,8 +178,8 @@ export function TopBar({ compact }: TopBarProps) {
           <DropdownItem onClick={() => navigate('/projects')}>Projects</DropdownItem>
           <DropdownItem onClick={() => navigate('/templates')}>Templates</DropdownItem>
           <DropdownItem onClick={() => {
-            const sandboxId = projectId || demoProjects[0]?.id;
-            if (sandboxId) navigate(`/projects/${sandboxId}/sandbox`);
+            // Open the current project's sandbox, or the project list to pick one.
+            navigate(projectId ? `/projects/${projectId}/sandbox` : '/projects');
           }}>Sandbox</DropdownItem>
           <DropdownDivider />
           <DropdownItem onClick={() => navigate('/settings')}>Workspace Settings</DropdownItem>

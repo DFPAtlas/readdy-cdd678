@@ -1,15 +1,23 @@
 # Forge
 
 ## 1. Project Description
-Forge is a local-first AI development workspace for planning, building, refining, previewing, versioning, and exporting professional websites. It provides a complete development environment with AI assistance, project management, build pipelines, and export capabilities — all powered by local AI models and services.
+Forge is an AI website builder. A Master Agent plans the site, specialist agents (UI, code, data, content, quality, deployment) build it, and the user refines everything in a live preview, then publishes (custom domains supported) or exports a standard static website to host anywhere.
 
-**Target users**: Web developers and creators who want AI-assisted website development with local-first architecture.
+**Target users**: Founders, freelancers, agencies and developers who want a professional website fast without giving up control of how it is built or where it lives.
 
-**Core value**: A professional-grade AI development environment that gives users complete control over their projects while providing intelligent assistance throughout the entire development lifecycle.
+**Core value**: You can see the AI work (plan, tasks, every change), and you keep the result (clean export, reversible versions, no lock-in).
+
+### Positioning rules (keep the public site consistent with these)
+- Do NOT describe Forge as "local-first". It runs on Supabase, a hosted AI gateway and Stripe.
+- Do NOT promise "bring your own API keys" — workspace keys are legacy; AI is routed centrally.
+- Accurate claims: exports a standard static site (HTML, CSS, assets); routes each task to a suitable model across OpenAI, Anthropic and Google with automatic fallback; every build is a restorable version; publishing with custom domains.
+- Write plainly and confidently. Avoid hedges like "designed to support", "help", "is being designed".
+- Never show internal notes on the public site (e.g. "No fabricated testimonials").
+- App chrome (status bar, sidebar, top bar, sandbox footer) must show only real service health from `systemStatusService` — never mock data.
 
 ## 2. Page Structure
 ### Public Pages
-- `/` - Hero landing page (placeholder, built in P2)
+- `/` - Landing page (hero, workspace walkthrough, features, how it works, agents, ownership, use cases, pricing teaser, FAQ, final CTA)
 - `/login` - Login page (placeholder)
 - `/setup` - First-run setup (placeholder)
 - `/onboarding` - Onboarding flow (placeholder)

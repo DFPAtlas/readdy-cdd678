@@ -175,7 +175,7 @@ export function PublicHeader() {
               Open workspace
             </Button>
             <p className="text-[11px] text-forge-text-muted text-center">
-              Local-first AI development workspace
+              AI website builder · you keep the code
             </p>
           </div>
         </div>

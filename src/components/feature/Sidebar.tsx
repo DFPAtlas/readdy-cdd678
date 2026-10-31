@@ -7,8 +7,6 @@ import {
   LayoutDashboard, FolderKanban, Copy, Bot, Activity, Settings,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { getServiceStatuses } from '@/services/mock/demoData';
-import { useEffect } from 'react';
 
 interface NavItem {
   label: string;
@@ -29,27 +27,14 @@ export function Sidebar() {
   const { isExpanded, toggle } = useSidebarStore();
   const location = useLocation();
   const navigate = useNavigate();
-  const setHealth = useSystemStore((s) => s.setHealth);
-
-  useEffect(() => {
-    const svcs = getServiceStatuses();
-    setHealth({
-      forgeApi: { status: svcs[0].status, latency: svcs[0].latency, version: svcs[0].version },
-      supabase: { status: svcs[1].status, latency: svcs[1].latency, version: svcs[1].version },
-      n8n: { status: svcs[2].status, latency: svcs[2].latency, version: svcs[2].version },
-      previewManager: { status: svcs[3].status, latency: svcs[3].latency, version: svcs[3].version },
-      ollama: { status: svcs[4].status, latency: svcs[4].latency, version: svcs[4].version },
-    });
-  }, [setHealth]);
-
+  // Health is published to the store by StatusBar, which polls the real checks.
   const health = useSystemStore((s) => s.health);
 
   const systemServices = health
     ? [
-        { key: 'forgeApi', label: 'Forge API', status: health.forgeApi.status },
-        { key: 'n8n', label: 'n8n', status: health.n8n.status },
-        { key: 'supabase', label: 'Supabase', status: health.supabase.status },
-        { key: 'previewManager', label: 'Preview', status: health.previewManager.status },
+        { key: 'auth', label: 'Auth', status: health.auth.status },
+        { key: 'database', label: 'Database', status: health.database.status },
+        { key: 'aiGateway', label: 'AI gateway', status: health.aiGateway.status },
       ]
     : [];
 

@@ -35,37 +35,37 @@ const SPECIALISTS: Specialist[] = [
   {
     icon: Palette,
     title: 'UI & UX',
-    text: 'Layout, component and interface guidance.',
+    text: 'Lays out pages, sections and components.',
     chips: ['Layout', 'Components', 'Responsive UI'],
   },
   {
     icon: Code2,
     title: 'Code',
-    text: 'Implementation and development-focused assistance.',
+    text: 'Writes and fixes the code behind each page.',
     chips: ['React', 'Logic', 'Refactoring'],
   },
   {
     icon: Database,
     title: 'Data',
-    text: 'Help structure application data and integrations.',
+    text: 'Sets up collections, forms and integrations.',
     chips: ['Schema', 'Queries', 'Data Flow'],
   },
   {
     icon: FileText,
     title: 'Content',
-    text: 'Help create and refine website content.',
+    text: 'Writes headlines, copy, SEO and alt text.',
     chips: ['Pages', 'Copy', 'Structure'],
   },
   {
     icon: ShieldCheck,
     title: 'Quality',
-    text: 'Review work for potential issues before release.',
+    text: 'Checks accessibility, links and layout before you ship.',
     chips: ['Review', 'Checks', 'Improvements'],
   },
   {
     icon: Rocket,
     title: 'Deployment',
-    text: 'Help prepare a finished project for export and deployment.',
+    text: 'Packages the site for publishing or export.',
     chips: ['Build', 'Export', 'Release'],
   },
 ];
@@ -76,19 +76,19 @@ const SUPPORTING: Supporting[] = [
   {
     icon: BrainCircuit,
     title: 'Shared Project Context',
-    text: 'Keep planning, project structure and build conversations connected instead of starting from zero every time.',
+    text: 'Every agent works from the same plan and project history, so nothing starts from zero.',
     highlight: false,
   },
   {
     icon: ListTodo,
     title: 'Visible Tasks',
-    text: 'Break work into understandable steps so users can see what is being planned, worked on and reviewed.',
+    text: 'Work is broken into steps you can follow: planned, in progress, reviewed.',
     highlight: false,
   },
   {
     icon: UserCheck,
     title: 'Human in Control',
-    text: 'Forge is designed to assist the developer rather than hide the build process behind a black box.',
+    text: 'Nothing ships without you. Review, change or reject anything the agents produce.',
     highlight: true,
   },
 ];
