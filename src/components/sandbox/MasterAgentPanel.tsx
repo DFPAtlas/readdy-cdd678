@@ -96,7 +96,7 @@ export function MasterAgentPanel() {
               onClick={() => setActiveAgentTab(t.id as typeof activeAgentTab)}
               className={`text-center px-1 py-2 rounded-lg text-[11px] transition-colors cursor-pointer whitespace-nowrap ${
                 activeAgentTab === t.id
-                  ? 'text-white bg-forge-amber/18 border border-forge-amber/40'
+                  ? 'text-white bg-forge-amber/[0.18] border border-forge-amber/40'
                   : 'text-forge-text-muted bg-transparent border border-transparent hover:text-white hover:bg-white/5'
               }`}
             >

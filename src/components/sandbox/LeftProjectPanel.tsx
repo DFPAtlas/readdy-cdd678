@@ -160,8 +160,8 @@ function FeaturesTab() {
           }}
           className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
             selected === f.id
-              ? 'bg-forge-amber/12 text-white'
-              : 'text-[#D7DCE1] hover:bg-forge-amber/12 hover:text-white'
+              ? 'bg-forge-amber/[0.12] text-white'
+              : 'text-[#D7DCE1] hover:bg-forge-amber/[0.12] hover:text-white'
           }`}
         >
           <f.icon className="h-4 w-4 text-forge-text-muted flex-shrink-0" />
@@ -243,7 +243,7 @@ function DataTab() {
         <button
           key={item}
           onClick={() => toast.show(`${item} — coming soon`)}
-          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-[#D7DCE1] hover:bg-forge-amber/12 hover:text-white transition-colors text-left cursor-pointer"
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-[#D7DCE1] hover:bg-forge-amber/[0.12] hover:text-white transition-colors text-left cursor-pointer"
         >
           <Database className="h-3 w-3 text-forge-text-muted flex-shrink-0" />
           {item}
@@ -264,7 +264,7 @@ function AuthTab() {
         <button
           key={item}
           onClick={() => toast.show(`${item} — coming soon`)}
-          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-[#D7DCE1] hover:bg-forge-amber/12 hover:text-white transition-colors text-left cursor-pointer"
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-[#D7DCE1] hover:bg-forge-amber/[0.12] hover:text-white transition-colors text-left cursor-pointer"
         >
           <User className="h-3 w-3 text-forge-text-muted flex-shrink-0" />
           {item}
