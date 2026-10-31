@@ -38,14 +38,14 @@ export default function HeroPage() {
         {/* Video background */}
         <HeroVideo />
 
-        {/* Layered overlay for readability */}
-        <div className="absolute inset-0 bg-black/30" aria-hidden="true" />
+        {/* Layered overlay for readability — kept light so the footage stays visible */}
+        <div className="absolute inset-0 bg-black/15" aria-hidden="true" />
         {/* Darker toward the bottom where the hero copy sits */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/20" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/5" aria-hidden="true" />
 
-        {/* Restrained amber warmth near bottom center */}
+        {/* Soft scrim under the fixed header so nav text never fights the footage */}
         <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-forge-amber/5 rounded-full blur-[100px]"
+          className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-black/60 via-black/25 to-transparent pointer-events-none"
           aria-hidden="true"
         />
 
@@ -127,7 +127,7 @@ export default function HeroPage() {
       <ProductFeatures />
 
       {/* Workflow Section */}
-      <section id="how-it-works" className="relative py-20 md:py-28 bg-forge-bg scroll-mt-16">
+      <section id="how-it-works" className="relative py-20 md:py-28 bg-[#0B0D10] scroll-mt-16">
         <WorkflowSteps />
       </section>
 
@@ -150,7 +150,7 @@ export default function HeroPage() {
       <FinalCta />
 
       {/* Bottom footer strip */}
-      <footer className="py-12" style={{ backgroundColor: '#0B0D10' }}>
+      <footer className="py-12" style={{ backgroundColor: '#060A0F' }}>
         <div className="max-w-6xl mx-auto px-5 md:px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">

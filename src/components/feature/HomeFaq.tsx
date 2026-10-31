@@ -109,7 +109,7 @@ export function HomeFaq() {
   };
 
   return (
-    <section id="faq" className="relative py-20 md:py-28 bg-forge-bg scroll-mt-16">
+    <section id="faq" className="relative py-20 md:py-28 bg-[#10151B] scroll-mt-16">
       <div className="max-w-6xl mx-auto px-5 md:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr] gap-10 lg:gap-16">
           {/* Left — sticky heading area */}

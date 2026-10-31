@@ -214,7 +214,7 @@ export function AgentSystemShowcase() {
   return (
     <section
       id="ai-agents"
-      className="relative py-20 md:py-28 bg-[#0B0D10] border-y border-forge-border-subtle scroll-mt-16"
+      className="relative py-20 md:py-28 bg-[#10151B] border-y border-forge-border-subtle scroll-mt-16"
     >
       <div className="max-w-6xl mx-auto px-5 md:px-6">
         {/* Header */}

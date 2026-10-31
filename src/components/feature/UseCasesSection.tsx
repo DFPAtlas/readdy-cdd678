@@ -247,7 +247,7 @@ export function UseCasesSection() {
   return (
     <section
       id="use-cases"
-      className="relative py-20 md:py-28 bg-forge-bg scroll-mt-16"
+      className="relative py-20 md:py-28 bg-[#0B0D10] scroll-mt-16"
     >
       <div className="max-w-6xl mx-auto px-5 md:px-6">
         {/* Header */}

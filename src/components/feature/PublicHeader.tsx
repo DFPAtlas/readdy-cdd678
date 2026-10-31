@@ -87,14 +87,14 @@ export function PublicHeader() {
 
           {/* Desktop nav */}
           <nav
-            className="hidden md:flex items-center gap-1"
+            className="hidden md:flex items-center gap-1 [text-shadow:0_1px_10px_rgba(0,0,0,0.65)]"
             aria-label="Main navigation"
           >
             {PUBLIC_NAV_LINKS.map((link) => (
               <button
                 key={link.label}
                 onClick={() => handleNavClick(link.href)}
-                className="px-3 py-1.5 text-sm text-white/70 hover:text-white transition-colors rounded-md hover:bg-white/5"
+                className="px-3 py-1.5 text-sm text-white/85 hover:text-white transition-colors rounded-md hover:bg-white/5"
               >
                 {link.label}
               </button>

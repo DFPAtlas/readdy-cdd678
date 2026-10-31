@@ -17,7 +17,13 @@ export const HERO_CONFIG = {
 
   videoSrc:
     'https://storage.readdy-site.link/project_files/b7510476-8cf2-4bb3-a2b7-f911993db24b/7fb69914-5f87-4573-bfd9-0b59545d6f4c_Firefly-just-change-the-text-and-put-the-Text--The--to-the-top-of-the-text--Forge---say-on-top-of-th.mp4',
-  posterSrc: undefined as string | undefined,
+
+  /**
+   * Still frame painted instantly behind the video so the hero is never a
+   * black void while the MP4 buffers (or if autoplay is blocked).
+   */
+  posterSrc:
+    'https://readdy.ai/api/search-image?query=Dark%20cinematic%20industrial%20workshop%20interior%20at%20night%20with%20glowing%20amber%20sparks%20floating%20in%20the%20air%2C%20blackened%20steel%20surfaces%20and%20heavy%20machinery%20silhouettes%2C%20soft%20volumetric%20light%20beams%20cutting%20through%20haze%2C%20minimal%20abstract%20composition%2C%20deep%20charcoal%20backdrop%20with%20warm%20amber%20highlights%2C%20high%20detail%20editorial%20photography&width=1920&height=1080&seq=forge-hero-poster-01&orientation=landscape',
 } as const;
 
 /** Header navigation for the public hero page */
