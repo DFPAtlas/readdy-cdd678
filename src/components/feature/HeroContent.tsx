@@ -14,7 +14,7 @@ export function HeroContent() {
   };
 
   return (
-    <div className="relative z-10 flex flex-col items-center justify-end min-h-screen w-full px-5 md:px-14 lg:px-20 pt-28 pb-36 md:pb-44 text-center">
+    <div className="relative z-10 flex flex-col items-center justify-end min-h-screen w-full px-5 md:px-14 lg:px-20 pt-28 pb-24 md:pb-28 text-center">
       <h1 className="sr-only">
         {HERO_CONFIG.headline} — {HERO_CONFIG.eyebrow}
       </h1>
