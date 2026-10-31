@@ -1,3 +1,4 @@
+import type { ServiceHealth, SystemServiceStatus } from '@/types';
 import { getSupabaseClient } from '@/services/supabaseClient';
 
 /* ──────────────────────────────────────────────────────────────
@@ -323,4 +324,33 @@ function deriveOverall(
     title: 'Operational',
     sentence: 'All configured Forge services are responding normally.',
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Compact health for the app chrome (status bar, sidebar, top bar)    */
+/* ------------------------------------------------------------------ */
+
+function toServiceStatus(status: CheckStatus): SystemServiceStatus['status'] {
+  switch (status) {
+    case 'operational':
+      return 'online';
+    case 'degraded':
+      return 'degraded';
+    case 'unavailable':
+      return 'offline';
+    default:
+      return 'unknown';
+  }
+}
+
+/** Maps a real status snapshot onto the small health shape the app chrome shows. */
+export function toServiceHealth(snapshot: StatusSnapshot): ServiceHealth {
+  const byKey = new Map(deriveStatus(snapshot).coreServices.map((s) => [s.key, s]));
+  const pick = (key: string): SystemServiceStatus => {
+    const svc = byKey.get(key);
+    return svc
+      ? { status: toServiceStatus(svc.status), message: svc.detail }
+      : { status: 'unknown' };
+  };
+  return { auth: pick('auth'), database: pick('database'), aiGateway: pick('ai_gateway') };
 }

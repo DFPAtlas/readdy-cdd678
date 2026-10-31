@@ -16,63 +16,53 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'What is Forge?',
     answer:
-      'Forge is an AI-assisted development workspace designed to help plan, build, refine, preview, version and export website and application projects from one organised environment.',
+      'Forge is an AI website builder. You describe the site, a Master Agent plans it, specialist agents build the pages, content and forms, and you refine everything in a live preview before publishing or exporting.',
   },
   {
-    question: 'Is Forge just another AI website generator?',
+    question: 'How is Forge different from other AI website builders?',
     answer:
-      'No. Forge is being designed around a visible development workflow rather than a single prompt-and-result experience. Projects can include structured pages, components, files, tasks, versions and AI-assisted development tools.',
+      'Two things. You can see the work: the plan, the tasks and every change are shown as they happen, not hidden behind one prompt box. And you keep the result: export your site as standard files and host it anywhere, with no lock-in.',
   },
   {
     question: 'Who is Forge for?',
     answer:
-      'Forge is aimed at developers, founders, agencies and technical builders who want AI assistance while keeping more visibility and control over how their projects are structured and developed.',
+      'Founders, freelancers, agencies and developers who want a professional website fast, without giving up control of how it is built or where it lives.',
   },
   {
-    question: 'Does Forge use AI?',
+    question: 'Which AI models does Forge use?',
     answer:
-      'Yes. Forge includes AI-assisted workflows and is designed to support configurable AI providers. Available providers and models depend on the Forge configuration and plan.',
-  },
-  {
-    question: 'What does local-first mean?',
-    answer:
-      'Forge is designed so development workflows can make greater use of locally controlled tooling and configurable AI infrastructure instead of requiring every part of the workflow to depend on one remote service.',
+      'Forge works across several AI providers, including OpenAI, Anthropic and Google, and routes each task to a suitable model automatically. If a provider has an outage, Forge falls back to another.',
   },
   {
     question: 'Do I own the code I create?',
     answer:
-      'Forge is designed around source-code ownership and exportable project structures so the finished project is not intended to remain trapped inside a proprietary visual editor.',
+      'Yes. Export your project as a standard static website (HTML, CSS and assets) that runs without Forge, and host it wherever you like.',
   },
   {
     question: 'Does Forge host my finished website?',
     answer:
-      'Forge includes a publishing workflow for deploying projects to preview, staging and production environments, with support for custom domains. Projects can also be exported as source code for deployment with your chosen hosting provider.',
+      'It can. Publish to preview, staging and production environments with your own custom domain, or export the source and use your own host.',
   },
   {
-    question: 'Can I use templates?',
+    question: 'Can I start from a template?',
     answer:
-      'Forge includes a templates area and is designed to support structured starting points. Availability may vary as the template library grows, and users should still be able to develop projects beyond their original starting point.',
+      'Yes. Pick a starter from the template library or start blank. Either way, everything stays fully editable.',
   },
   {
-    question: 'Can Forge work with an existing project?',
+    question: 'Can I import an existing website?',
     answer:
-      'Forge currently focuses on projects created and managed through its own workspace. Additional import workflows can be added as the platform develops.',
-  },
-  {
-    question: 'Will Forge replace developers?',
-    answer:
-      'Forge is designed to assist developers, not remove them from the process. AI can help with planning, implementation and repetitive work, while the user remains responsible for direction, review and final decisions.',
+      'Not yet. Forge currently builds projects created in its own workspace.',
   },
   {
     question: 'How much does Forge cost?',
     answer:
-      'Forge offers different plans based on usage and included capabilities. See the pricing page for the full breakdown of every plan and allowance.',
+      'There is a Free plan to try Forge, with paid plans for publishing live sites and more AI capacity. See the pricing page for every plan and allowance.',
     link: { label: 'View pricing', href: '/pricing' },
   },
   {
     question: 'Where can I learn more?',
     answer:
-      'The Forge Help Centre and documentation cover the workspace, development workflow, AI-assisted building and publishing in more detail.',
+      'The Forge Help Centre covers the workspace, building with AI, publishing and exporting in detail.',
     link: { label: 'Open documentation', href: '/help' },
   },
 ];

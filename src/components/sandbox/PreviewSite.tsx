@@ -31,11 +31,11 @@ export function PreviewSite() {
         data-section="Hero"
       >
         <div>
-          <h1 className="text-[clamp(34px,5vw,58px)] font-bold leading-[1.02] mb-4">
+          <p role="heading" aria-level={2} className="text-[clamp(34px,5vw,58px)] font-bold leading-[1.02] mb-4">
             Build smarter.
             <br />
             <span className="text-forge-amber">Ship faster.</span>
-          </h1>
+          </p>
           <p className="text-sm text-[#B1B8C0] leading-relaxed max-w-[520px]">
             Plan, build, and deploy production-ready websites with local AI agents.
             Your code, your models, your control — all from one workspace.

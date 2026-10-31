@@ -12,6 +12,9 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import "./concept-sandbox.css";
+import { Link } from "react-router-dom";
+import { fetchSystemStatus, toServiceHealth } from "@/services/systemStatusService";
+import type { ServiceHealth } from "@/types";
 import FloatingPanel from "./FloatingPanel";
 import {
   loadSandboxDocument,
@@ -127,7 +130,6 @@ const railItems = [
   { name: "Data", icon: Database }, { name: "Auth", icon: UserRound },
 ];
 
-const services = ["Forge API", "Supabase", "n8n", "Ollama"];
 
 const elementDefaults: Record<CanvasElementKind, Pick<CanvasElement, "content" | "width" | "height" | "background" | "color">> = {
   Heading: { content: "Your new heading", width: 300, height: 58, background: "transparent", color: "#111820" },
@@ -251,6 +253,41 @@ function computeLayerDepth(elements: CanvasElement[]): Map<string, number> {
 }
 
 export default function ForgeSandbox() {
+  // Real service health (auth, database, AI gateway), refreshed every minute.
+  const [serviceHealth, setServiceHealth] = useState<ServiceHealth | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetchSystemStatus()
+        .then((snapshot) => { if (!cancelled) setServiceHealth(toServiceHealth(snapshot)); })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+  const serviceDots = serviceHealth
+    ? [
+        { label: "Auth", ...serviceHealth.auth },
+        { label: "Database", ...serviceHealth.database },
+        { label: "AI", ...serviceHealth.aiGateway },
+      ]
+    : [];
+  const overallService = !serviceHealth
+    ? "unknown"
+    : serviceDots.some((d) => d.status === "offline")
+      ? "offline"
+      : serviceDots.some((d) => d.status === "degraded")
+        ? "degraded"
+        : serviceDots.some((d) => d.status === "unknown")
+          ? "unknown"
+          : "online";
+  const overallServiceLabel = {
+    online: "All services online",
+    degraded: "Some services degraded",
+    offline: "A service is unavailable",
+    unknown: "Service status not verified",
+  }[overallService];
   const [activeTool, setActiveTool] = useState("Add");
   const [selectedLayer, setSelectedLayer] = useState("Hero");
   const [rightTab, setRightTab] = useState<"ai" | "properties">("ai");
@@ -2022,7 +2059,7 @@ export default function ForgeSandbox() {
         <button className="top-action" onClick={openSitePreview}>Preview <Eye size={16} /></button>
         <button className="top-action" onClick={openBuild}><TerminalSquare size={16} /> Build</button>
         <button className="publish-button" onClick={openPublish}><Upload size={16} /> Publish</button>
-        <span className="online-dot" title="All services online" />
+        <span className="online-dot" data-status={overallService} title={overallServiceLabel} aria-label={overallServiceLabel} />
         {presence.length > 0 && (
           <div className="presence-cluster" title={`${presence.length} collaborator${presence.length === 1 ? "" : "s"} online`}>
             {presence.slice(0, 4).map((p) => (
@@ -2570,8 +2607,8 @@ export default function ForgeSandbox() {
             ))}
           </div>
           <div className="preview-ready"><span />{pages.length} page{pages.length === 1 ? "" : "s"}</div>
-          <div className="service-list">{services.map((service) => <button key={service}><span />{service}</button>)}</div>
-          <button className="settings-button" onClick={() => notify("System settings opened")}><Settings size={20} /></button>
+          <div className="service-list">{serviceDots.map((svc) => <Link key={svc.label} to="/system/status" title={svc.message}><span data-status={svc.status} />{svc.label}</Link>)}</div>
+          <Link className="settings-button" to={projectId ? `/projects/${projectId}/settings` : "/settings"} title="Project settings" aria-label="Project settings"><Settings size={20} /></Link>
         </footer>
       </section>
 

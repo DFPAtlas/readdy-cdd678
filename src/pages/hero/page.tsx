@@ -3,14 +3,10 @@ import { PublicHeader } from '@/components/feature/PublicHeader';
 import { HeroVideo } from '@/components/feature/HeroVideo';
 import { HeroContent } from '@/components/feature/HeroContent';
 import { WorkflowSteps } from '@/components/feature/WorkflowSteps';
-import { ArchitectureStrip } from '@/components/feature/ArchitectureStrip';
-import { TrustStrip } from '@/components/feature/TrustStrip';
 import { ProductFeatures } from '@/components/feature/ProductFeatures';
 import { AgentSystemShowcase } from '@/components/feature/AgentSystemShowcase';
 import { OwnershipSection } from '@/components/feature/OwnershipSection';
 import { UseCasesSection } from '@/components/feature/UseCasesSection';
-import { StartingPointsSection } from '@/components/feature/StartingPointsSection';
-import { TrustEvidenceSection } from '@/components/feature/TrustEvidenceSection';
 import { HomePricingTeaser } from '@/components/feature/HomePricingTeaser';
 import { HomeFaq } from '@/components/feature/HomeFaq';
 import { FinalCta } from '@/components/feature/FinalCta';
@@ -43,8 +39,9 @@ export default function HeroPage() {
         <HeroVideo />
 
         {/* Layered overlay for readability */}
-        <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" aria-hidden="true" />
+        <div className="absolute inset-0 bg-black/30" aria-hidden="true" />
+        {/* Darker toward the bottom where the hero copy sits */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/20" aria-hidden="true" />
 
         {/* Restrained amber warmth near bottom center */}
         <div
@@ -58,7 +55,7 @@ export default function HeroPage() {
         {/* Scroll indicator */}
         <button
           onClick={scrollToSandbox}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-pointer group"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-pointer group"
           aria-label="Scroll to sandbox workspace"
         >
           {/* Animated vertical line */}
@@ -89,7 +86,7 @@ export default function HeroPage() {
                 Explore the Forge workspace
               </h2>
               <p className="mt-2 text-sm text-white/50 max-w-lg">
-                Preview how projects, pages, AI-assisted planning, tasks and build activity come together inside Forge.
+                A walkthrough of the workspace with a sample project. See the Master Agent plan the work, the specialist agents build it, and the preview update as they go.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -137,23 +134,11 @@ export default function HeroPage() {
       {/* AI agent system showcase */}
       <AgentSystemShowcase />
 
-      {/* Architecture Pipeline */}
-      <ArchitectureStrip />
-
       {/* Ownership / control section */}
       <OwnershipSection />
 
       {/* Use cases */}
       <UseCasesSection />
-
-      {/* Starting points */}
-      <StartingPointsSection />
-
-      {/* Trust evidence */}
-      <TrustEvidenceSection />
-
-      {/* Trust Strip */}
-      <TrustStrip />
 
       {/* Pricing teaser */}
       <HomePricingTeaser />
@@ -173,7 +158,7 @@ export default function HeroPage() {
               <span className="text-sm font-semibold text-white/80">Forge</span>
             </div>
             <p className="text-xs text-white/40 text-center md:text-right">
-              Local-first AI development workspace. Your code, your models, your control.
+              AI website builder. Your code, your choice of model, your control.
             </p>
           </div>
           <div className="mt-6 pt-6 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-2">
@@ -184,7 +169,6 @@ export default function HeroPage() {
               <Link to="/help?topic=privacy" className="hover:text-white/50 transition-colors cursor-pointer">Privacy</Link>
               <Link to="/help?topic=terms" className="hover:text-white/50 transition-colors cursor-pointer">Terms</Link>
               <Link to="/help" className="hover:text-white/50 transition-colors cursor-pointer">Documentation</Link>
-              <Link to="/forge-admin/login" className="hover:text-white/50 transition-colors cursor-pointer">Admin login</Link>
             </div>
           </div>
         </div>

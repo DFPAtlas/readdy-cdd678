@@ -3,24 +3,21 @@ import { Zap } from 'lucide-react';
 /**
  * Forge Hero Configuration
  * Central place for hero text, asset paths, and CTA configuration.
- * Replace posterSrc and logoSrc when real assets are uploaded.
+ * Set posterSrc to an uploaded still of the video once one exists; until
+ * then the hero shows a dark gradient while the video loads.
  */
 export const HERO_CONFIG = {
-  title: 'Forge',
-  tagline: 'Plan. Build. Refine. Deploy.',
+  eyebrow: 'Forge · AI website builder',
+  headline: 'Build your site with AI. Keep the code.',
   description:
-    'The local-first AI development workspace for planning, building, refining, previewing, versioning, and exporting production-ready websites.',
+    'Forge plans, builds and previews your website with a team of AI agents you can watch at work — then hands you clean source code to host anywhere.',
   primaryCta: 'Start a new project',
-  secondaryCta: 'Open Forge workspace',
-  learnMore: 'See how Forge works',
-  privacyIndicators: ['Local-first'],
+  secondaryCta: 'See it in action',
+  proofPoints: ['Export clean source code', 'The right AI model for each task', 'Every version reversible'],
 
-  // Asset paths — replace with real uploads when available
   videoSrc:
     'https://storage.readdy-site.link/project_files/b7510476-8cf2-4bb3-a2b7-f911993db24b/7fb69914-5f87-4573-bfd9-0b59545d6f4c_Firefly-just-change-the-text-and-put-the-Text--The--to-the-top-of-the-text--Forge---say-on-top-of-th.mp4',
-  posterSrc: '/assets/forge-hero-poster.jpg',
-  logoSrc: '/assets/forge-logo.png',
-  videoAlt: 'Forge workspace cinematic preview',
+  posterSrc: undefined as string | undefined,
 } as const;
 
 /** Header navigation for the public hero page */
@@ -59,25 +56,6 @@ export const WORKFLOW_STEPS = [
     description: 'Export clean source code ready for your chosen host.',
     icon: 'Rocket',
   },
-] as const;
-
-/** Architecture pipeline nodes */
-export const ARCHITECTURE_NODES = [
-  { label: 'Wizard', icon: 'ClipboardList' },
-  { label: 'Master Agent', icon: 'Bot' },
-  { label: 'Specialist Agents', icon: 'Users' },
-  { label: 'Live Preview', icon: 'MonitorPlay' },
-  { label: 'Export', icon: 'Package' },
-] as const;
-
-/** Trust strip items */
-export const TRUST_ITEMS = [
-  { label: 'Local-first by design', icon: 'Shield' },
-  { label: 'Your choice of AI providers', icon: 'Cpu' },
-  { label: 'Controlled agent tools', icon: 'Settings' },
-  { label: 'You own the source code', icon: 'FileCode' },
-  { label: 'Reversible version history', icon: 'GitBranch' },
-  { label: 'Portable export formats', icon: 'Package' },
 ] as const;
 
 /** Loading screen rotating statuses */

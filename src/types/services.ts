@@ -57,12 +57,11 @@ export interface RealtimeEvent {
 
 // --- Service Health ---
 
+/** Live health of the services Forge actually depends on (see systemStatusService). */
 export interface ServiceHealth {
-  forgeApi: SystemServiceStatus;
-  supabase: SystemServiceStatus;
-  n8n: SystemServiceStatus;
-  previewManager: SystemServiceStatus;
-  ollama: SystemServiceStatus;
+  auth: SystemServiceStatus;
+  database: SystemServiceStatus;
+  aiGateway: SystemServiceStatus;
 }
 
 export interface SystemServiceStatus {
