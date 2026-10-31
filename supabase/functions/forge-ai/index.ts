@@ -23,15 +23,18 @@ const MAX_OPERATIONS = 30;
 const MAX_CONTEXT_JSON_BYTES = 200000;
 const MAX_AGENT_CALLS = 3;
 
-const ALLOWED_ORIGINS = (Deno.env.get('FORGE_ALLOWED_ORIGINS') ?? '')
+/* Browser origins allowed to call this function. The production site and the
+   Readdy preview are always allowed; FORGE_ALLOWED_ORIGINS (comma-separated)
+   can add more without a code change. */
+const PRODUCTION_ORIGINS = ['https://theforges.org', 'https://www.theforges.org'];
+const EXTRA_ORIGINS = (Deno.env.get('FORGE_ALLOWED_ORIGINS') ?? '')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 function originAllowed(origin: string | null): boolean {
   if (!origin) return false;
-  if (!ALLOWED_ORIGINS.length) {
-    return /^https:\/\/[^/]*readdy\.ai$/.test(origin) || /^https?:\/\/localhost(:\d+)?$/.test(origin);
-  }
-  return ALLOWED_ORIGINS.includes(origin);
+  if (PRODUCTION_ORIGINS.includes(origin) || EXTRA_ORIGINS.includes(origin)) return true;
+  if (/^https:\/\/[^/]*readdy\.ai$/.test(origin)) return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 
 type PlanConfig = {
@@ -640,7 +643,7 @@ async function callOllama(modelKey: string, url: string | undefined, token: stri
 
 /* ─── Main handler ─── */
 
-serve(async (req) => {
+async function handle(req: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const cors = corsHeaders(req);
 
@@ -869,10 +872,13 @@ serve(async (req) => {
   if (providerMode === 'live' && selectedModel) {
     const usedCred = providerCredential(selectedModel.provider_key, platformCreds, byokKeys);
     if (usedCred?.credentialId) {
-      await admin.from('platform_api_credentials')
-        .update({ last_used_at: new Date().toISOString() })
-        .eq('id', usedCred.credentialId)
-        .then(() => {}).catch(() => {});
+      try {
+        await admin.from('platform_api_credentials')
+          .update({ last_used_at: new Date().toISOString() })
+          .eq('id', usedCred.credentialId);
+      } catch {
+        // Bookkeeping only; never fail the AI response over it.
+      }
     }
   }
 
@@ -942,4 +948,22 @@ serve(async (req) => {
   };
 
   return json(resultBody, 200, cors);
+}
+
+/* Every response, including errors and unexpected failures, carries the CORS
+   headers so the browser can read the real error instead of a network error. */
+serve(async (req) => {
+  const cors = corsHeaders(req);
+  let res: Response;
+  try {
+    res = await handle(req);
+  } catch (err) {
+    console.error('forge-ai unhandled error', err instanceof Error ? err.message : String(err));
+    res = json({ requestId: crypto.randomUUID(), code: 'ERROR', errorCode: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again.', localFallbackAvailable: true }, 500);
+  }
+  const headers = new Headers(res.headers);
+  for (const [key, value] of Object.entries(cors)) {
+    if (!headers.has(key)) headers.set(key, String(value));
+  }
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 });
