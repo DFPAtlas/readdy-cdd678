@@ -37,7 +37,7 @@ export function BuildsSection() {
     setLoading(true);
     setError('');
     const res = await adminApi.buildsList();
-    if (res.ok) { setBuilds(res.data.builds); setSummary(res.data.summary); }
+    if (res.ok === true) { setBuilds(res.data.builds); setSummary(res.data.summary); }
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -48,7 +48,7 @@ export function BuildsSection() {
     setDetailLoading(true);
     setDetail(null);
     const res = await adminApi.buildsGet(buildId);
-    if (res.ok) setDetail(res.data.build);
+    if (res.ok === true) setDetail(res.data.build);
     setDetailLoading(false);
   };
 

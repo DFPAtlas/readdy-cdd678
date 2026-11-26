@@ -21,11 +21,11 @@ export function generateIdempotencyKey(): string {
   return `idem_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function safeDelay(): Promise<void> {
+export function safeDelay(delayMs = config.delay): Promise<void> {
   if (config.offlineMode) {
     return Promise.reject(new Error('Offline mode — network unavailable'));
   }
-  const jitter = config.delay * (0.5 + Math.random());
+  const jitter = delayMs * (0.5 + Math.random());
   return new Promise((resolve) => setTimeout(resolve, jitter));
 }
 
@@ -56,7 +56,6 @@ export function errorResponse(code: string, message: string, details?: Record<st
     success: false,
     error,
     meta: createApiMeta(),
-    data: undefined,
   };
 }
 

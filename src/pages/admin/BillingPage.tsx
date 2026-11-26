@@ -32,11 +32,11 @@ export default function BillingPage() {
       adminApi.billingList(statusFilter || undefined),
       adminApi.billingPaymentProblems(),
     ]);
-    if (s.ok) setSummary(s.data.summary);
+    if (s.ok === true) setSummary(s.data.summary);
     else setError(s.message);
-    if (subsRes.ok) setSubs(subsRes.data.subscriptions);
+    if (subsRes.ok === true) setSubs(subsRes.data.subscriptions);
     else if (!error) setError(subsRes.message);
-    if (p.ok) setProblems(p.data.items);
+    if (p.ok === true) setProblems(p.data.items);
     setLoading(false);
   }, [statusFilter]);
 
@@ -66,8 +66,8 @@ export default function BillingPage() {
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>, label: string) => {
     setFeedback('');
     const res = await fn();
-    setFeedback(res.ok ? label : res.message ?? 'Action failed.');
-    if (res.ok) load();
+    setFeedback(res.ok === true ? label : res.message ?? 'Action failed.');
+    if (res.ok === true) load();
   };
 
   return (

@@ -22,9 +22,9 @@ export function ModerationSection() {
       adminApi.templatesQueue(),
       canForms ? adminApi.formsStats() : Promise.resolve(null),
     ]);
-    if (t.ok) setTemplates(t.data.templates);
+    if (t.ok === true) setTemplates(t.data.templates);
     else setError(t.message);
-    if (f && f.ok) setStats(f.data.stats);
+    if (f && f.ok === true) setStats(f.data.stats);
     setLoading(false);
   }, [canForms]);
 
@@ -39,7 +39,7 @@ export function ModerationSection() {
     }
     setFeedback('');
     const res = await adminApi.templatesModerate(templateId, status, reason);
-    setFeedback(res.ok ? `Template ${status}.` : res.message);
+    setFeedback(res.ok === true ? `Template ${status}.` : res.message);
     load();
   };
 

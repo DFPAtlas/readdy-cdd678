@@ -341,7 +341,7 @@ export const useAssetStore = create<AssetStoreState>((set, get) => ({
     for (const file of files) {
       const validated = validateFile(file);
       const uploadId = crypto.randomUUID();
-      if (!validated.ok) {
+      if (validated.ok === false) {
         nextUploads.push({
           id: uploadId, file, name: file.name, type: 'image', mimeType: file.type,
           size: file.size, progress: 0, status: 'error', error: validated.error,
@@ -431,7 +431,7 @@ export const useAssetStore = create<AssetStoreState>((set, get) => ({
     const asset = get().assets.find((a) => a.id === id);
     if (!asset) return { ok: false, message: 'Asset not found' };
     const validated = validateFile(file);
-    if (!validated.ok) return { ok: false, message: validated.error };
+    if (validated.ok === false) return { ok: false, message: validated.error };
 
     if (!asset.local) {
       const supabase = getSandboxClient();
@@ -595,7 +595,7 @@ async function processOneUpload(
 
 export async function uploadSingleFile(file: File): Promise<{ asset?: AssetRecord; error?: string }> {
   const validated = validateFile(file);
-  if (!validated.ok) return { error: validated.error };
+  if (validated.ok === false) return { error: validated.error };
   const supabase = getSandboxClient();
   const project = supabase ? await resolveSandboxProject() : null;
 

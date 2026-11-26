@@ -77,7 +77,7 @@ export default function PublishDialog({
       idempotencyKey,
     });
     setBusy(false);
-    if (resultAction.ok) {
+    if (resultAction.ok === true) {
       setResult(`Deployment requested for ${ENVIRONMENT_LABELS[environment]}.`);
       setConfirming(false);
       setConfirmText('');

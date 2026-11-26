@@ -27,7 +27,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     setStatus('loading');
     adminApi.whoami().then((res) => {
       if (cancelled) return;
-      if (res.ok) {
+      if (res.ok === true) {
         setAdmin(res.data.admin);
         setStatus('ready');
       } else if (res.code === 'AUTH_REQUIRED') {

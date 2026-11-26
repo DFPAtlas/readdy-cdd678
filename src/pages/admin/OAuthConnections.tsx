@@ -44,7 +44,7 @@ export function OAuthConnections({ providers, connections, canManage, onChanged 
     setRevoking(false);
     setRevokeTarget(null);
     setManageConnection(null);
-    if (res.ok) {
+    if (res.ok === true) {
       onChanged();
     } else {
       setFeedback(res.message);

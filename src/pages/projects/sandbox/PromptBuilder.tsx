@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bookmark, ChevronDown, Save, Trash2, X, Zap } from 'lucide-react';
-import { fetchModelRegistry, type AiModelInfo, type AiScope, type AgentType, AGENT_LABELS } from './sandboxAiOrchestration';
+import { fetchModelRegistry, type AiProviderInfo, type AiModelInfo, type AiScope, type AgentType, AGENT_LABELS } from './sandboxAiOrchestration';
 import { estimateAiCredits } from './sandboxBilling';
 
 export type PromptBuilderResult = {
@@ -66,6 +66,7 @@ export default function PromptBuilder({
   const [agent, setAgent] = useState<AgentType>('master');
   const [preferredModel, setPreferredModel] = useState('');
   const [localOnly, setLocalOnly] = useState(false);
+  const [providers, setProviders] = useState<AiProviderInfo[]>([]);
   const [models, setModels] = useState<AiModelInfo[]>([]);
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
@@ -75,7 +76,8 @@ export default function PromptBuilder({
   const set = (key: keyof typeof DEFAULT_FIELDS, value: string | boolean) => setFields((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
-    void fetchModelRegistry().then(({ models: rows }) => {
+    void fetchModelRegistry().then(({ models: rows, providers: providerRows }) => {
+      setProviders(providerRows);
       setModels(rows.filter((m) => m.enabled));
     });
   }, []);
@@ -229,7 +231,7 @@ export default function PromptBuilder({
         <label>Model preference
           <select className="ai-select" value={preferredModel} onChange={(e) => setPreferredModel(e.target.value)}>
             <option value="">Auto (router decides)</option>
-            {models.map((model) => <option key={model.id} value={model.model_key}>{model.display_name} — {model.provider_key ?? ''}</option>)}
+            {models.map((model) => <option key={model.id} value={model.model_key}>{model.display_name} — {providers.find((provider) => provider.id === model.provider_id)?.display_name ?? ''}</option>)}
           </select>
         </label>
       </div>

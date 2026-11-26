@@ -13,15 +13,19 @@ export default function AssetUploadZone() {
 
   const collect = (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
-    const hasImage = files.some((f) => validateFile(f).ok && validateFile(f).kind === 'image');
+    const images = files.filter((file) => {
+      const validation = validateFile(file);
+      return validation.ok === true && validation.kind === 'image';
+    });
+    const hasImage = images.length > 0;
     if (hasImage) {
       setPending({ files, estimate: null, estimating: true });
       void (async () => {
-        const images = files.filter((f) => validateFile(f).ok && validateFile(f).kind === 'image').slice(0, 6);
+        const sampleImages = images.slice(0, 6);
         let original = 0;
         let optimized = 0;
         let count = 0;
-        for (const img of images) {
+        for (const img of sampleImages) {
           const result = await compressImageToWebP(img).catch(() => null);
           if (result) {
             original += result.originalSize;

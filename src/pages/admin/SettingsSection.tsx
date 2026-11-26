@@ -49,7 +49,7 @@ export function FlagsTab() {
     setLoading(true);
     setError('');
     const res = await adminApi.flagsList();
-    if (res.ok) setFlags(res.data.flags);
+    if (res.ok === true) setFlags(res.data.flags);
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -61,7 +61,7 @@ export function FlagsTab() {
     if (reason === null) return;
     setFeedback('');
     const res = await adminApi.flagsSet(flagKey, enabled, reason);
-    setFeedback(res.ok ? 'Updated.' : res.message);
+    setFeedback(res.ok === true ? 'Updated.' : res.message);
     load();
   };
 
@@ -71,7 +71,7 @@ export function FlagsTab() {
     if (reason === null) return;
     setFeedback('');
     const res = await adminApi.flagsSet(key.trim(), false, reason);
-    setFeedback(res.ok ? 'Flag created.' : res.message);
+    setFeedback(res.ok === true ? 'Flag created.' : res.message);
     setKey('');
     load();
   };
@@ -132,7 +132,7 @@ export function MaintenanceTab() {
     setLoading(true);
     setError('');
     const res = await adminApi.maintenanceGet();
-    if (res.ok) setModes(res.data.modes);
+    if (res.ok === true) setModes(res.data.modes);
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -144,7 +144,7 @@ export function MaintenanceTab() {
     if (reason === null) return;
     setFeedback('');
     const res = await adminApi.maintenanceSet(scope, enabled, reason);
-    setFeedback(res.ok ? 'Updated.' : res.message);
+    setFeedback(res.ok === true ? 'Updated.' : res.message);
     load();
   };
 
@@ -197,7 +197,7 @@ export function AdminsTab() {
     setLoading(true);
     setError('');
     const res = await adminApi.adminsList();
-    if (res.ok) { setAdmins(res.data.admins); setOwnerCount(res.data.ownerCount); }
+    if (res.ok === true) { setAdmins(res.data.admins); setOwnerCount(res.data.ownerCount); }
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -210,7 +210,7 @@ export function AdminsTab() {
     if (reason === null) return;
     setFeedback('');
     const res = await adminApi.adminsSet(userId.trim(), role, true, reason);
-    setFeedback(res.ok ? 'Admin added.' : res.message);
+    setFeedback(res.ok === true ? 'Admin added.' : res.message);
     setUserId('');
     load();
   };
@@ -224,7 +224,7 @@ export function AdminsTab() {
     const targetRole = pending.type === 'role' ? (pending.role ?? pending.target.role) : pending.target.role;
     const res = await adminApi.adminsSet(pending.target.user_id, targetRole, pending.type === 'role', reason);
     setBusy(false);
-    setFeedback(res.ok ? 'Updated.' : res.message);
+    setFeedback(res.ok === true ? 'Updated.' : res.message);
     setPending(null);
     load();
   };
@@ -348,7 +348,7 @@ export function AuditTab() {
     setLoading(true);
     setError('');
     const res = await adminApi.auditList({ query: query || undefined, actionFilter: actionFilter || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, page, pageSize });
-    if (res.ok) { setEvents(res.data.events); setActions(res.data.actions); setTotal(res.data.total); }
+    if (res.ok === true) { setEvents(res.data.events); setActions(res.data.actions); setTotal(res.data.total); }
     else setError(res.message);
     setLoading(false);
   }, [query, actionFilter, dateFrom, dateTo, page]);
@@ -442,7 +442,7 @@ export function DataTab() {
     setFeedback('');
     const res = kind === 'export' ? await adminApi.dataExport(userId, reason) : await adminApi.dataDelete(userId, reason, true);
     setBusy(false);
-    setFeedback(res.ok ? `${kind === 'export' ? 'Export' : 'Deletion'} request queued (${res.data.affected.projects} projects, ${res.data.affected.subscriptions} subscriptions).` : res.message);
+    setFeedback(res.ok === true ? `${kind === 'export' ? 'Export' : 'Deletion'} request queued (${res.data.affected.projects} projects, ${res.data.affected.subscriptions} subscriptions).` : res.message);
   };
 
   return (

@@ -778,10 +778,10 @@ export function scanTheme(theme: ThemeDefinition): DesignFinding[] {
     [c.muted, c.background, 'Muted text on background'],
     [c.body, c.surface, 'Body text on surface'],
     [c.primary, c.background, 'Primary on background'],
-    [c.buttons.variants.primary.textColor, c.buttons.variants.primary.background, 'Button text on primary'],
-    [c.buttons.variants.secondary.textColor, c.buttons.variants.secondary.background, 'Button text on secondary'],
-    [c.buttons.variants.outline.textColor, c.background, 'Outline button text on background'],
-    [c.forms.labelColor, c.background, 'Field labels on background'],
+    [theme.buttons.variants.primary.textColor, theme.buttons.variants.primary.background, 'Button text on primary'],
+    [theme.buttons.variants.secondary.textColor, theme.buttons.variants.secondary.background, 'Button text on secondary'],
+    [theme.buttons.variants.outline.textColor, c.background, 'Outline button text on background'],
+    [theme.forms.labelColor, c.background, 'Field labels on background'],
   ];
 
   pairs.forEach(([fg, bg, label]) => {

@@ -88,7 +88,7 @@ export async function uploadProjectAsset(
   file: File,
 ): Promise<{ ok: boolean; asset?: AssetRecord; error?: string }> {
   const validated = validateFile(file);
-  if (!validated.ok) return { ok: false, error: validated.error };
+  if (validated.ok === false) return { ok: false, error: validated.error };
 
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, error: 'Storage unavailable' };

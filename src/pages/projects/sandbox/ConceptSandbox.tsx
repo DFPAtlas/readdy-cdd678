@@ -60,7 +60,7 @@ import {
 import {
   checksumDocument, clearLocalVersions, clearRecovery, getVersionBlueprint, loadRecovery,
   listVersionHistory, saveRecovery, snapshotVersion,
-  type RecoveryRecord, type SnapshotOptions, type VersionEntry, type VersionSource,
+  type RecoveryRecord, type SnapshotResult, type SnapshotOptions, type VersionEntry, type VersionSource,
 } from "./sandboxVersions";
 import VersionHistoryPanel from "./VersionHistoryPanel";
 import CreateCheckpointDialog from "./CreateCheckpointDialog";
@@ -581,7 +581,7 @@ export default function ForgeSandbox({ projectId, initialDocument }: { projectId
 
   const createPage = async (input: { name: string; slug: string; type: PageType; addToNavigation: boolean }) => {
     const check = validateSlug(input.slug, pages.map((page) => page.slug));
-    if (!check.ok) { notify(check.error ?? "Invalid slug"); return; }
+    if (check.ok === false) { notify(check.error ?? "Invalid slug"); return; }
     if (!(await guardPageCreation(1))) return;
     const newPage = makeNewPage(input.name, input.slug, input.type, projectName);
     setPageHistories((current) => ({ ...current, [activePageId]: history }));
@@ -748,7 +748,7 @@ export default function ForgeSandbox({ projectId, initialDocument }: { projectId
         nextPages = nextPages.map((entry) => entry.id === operation.pageId ? { ...entry, name: operation.name } : entry);
       } else if (operation.kind === "setPageSlug") {
         const check = validateSlug(operation.slug, nextPages.filter((entry) => entry.id !== operation.pageId).map((entry) => entry.slug));
-        if (check.ok) nextPages = nextPages.map((entry) => entry.id === operation.pageId ? { ...entry, slug: operation.slug } : entry);
+        if (check.ok === true) nextPages = nextPages.map((entry) => entry.id === operation.pageId ? { ...entry, slug: operation.slug } : entry);
       } else if (operation.kind === "setHomepage") {
         const prevHome = nextPages.find((entry) => entry.isHome);
         const others = nextPages.filter((entry) => entry.id !== operation.pageId && entry.id !== prevHome?.id).map((entry) => entry.slug);
@@ -825,7 +825,7 @@ export default function ForgeSandbox({ projectId, initialDocument }: { projectId
     };
   };
 
-  const recordVersion = async (source: VersionSource, opts: Omit<SnapshotOptions, "source"> = {}, force = false) => {
+  const recordVersion = async (source: VersionSource, opts: Omit<SnapshotOptions, "source"> = {}, force = false): Promise<Pick<SnapshotResult, 'checksum' | 'skipped' | 'id' | 'versionNumber'>> => {
     const document = buildDocument();
     const checksum = checksumDocument(document);
     if (!force && lastChecksumRef.current === checksum) return { checksum, skipped: true };
@@ -3011,7 +3011,7 @@ function PropertiesPanel({ selected, element, pages, condensed, onUpdate, onNoti
               {link.type === "email" && <label>Email address<input value={link.url} onChange={(event) => updateLink({ url: event.target.value })} placeholder="hello@example.com" /></label>}
               {link.type === "tel" && <label>Phone number<input value={link.url} onChange={(event) => updateLink({ url: event.target.value })} placeholder="+1 555 000 0000" /></label>}
               {link.type === "file" && <label>File URL<input value={link.url} onChange={(event) => updateLink({ url: event.target.value })} placeholder="https://…/file.pdf" /></label>}
-              {!linkCheck.ok && <p className="asset-hint link-error">{linkCheck.error}</p>}
+              {linkCheck.ok === false && <p className="asset-hint link-error">{linkCheck.error}</p>}
             </div>
           )}
         </div>

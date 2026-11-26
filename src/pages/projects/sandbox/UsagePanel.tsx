@@ -6,7 +6,7 @@ import {
 import {
   fetchUsageSummary, fetchPlanCatalogue, startCheckout, openBillingPortal,
   adminGrantCredits, adminUpdateEntitlement,
-  type UsageSummary, type PlanCatalogue, type PlanKey, type Meter,
+  type UsageSummary, type PlanCatalogue, type PlanKey, type Meter, type EntitlementKey,
 } from './sandboxBilling';
 
 type UsagePanelProps = { onNotify: (message: string) => void };
@@ -19,7 +19,7 @@ const ENTITLEMENT_KEYS = [
   'max_active_projects', 'max_pages_per_project', 'max_team_members',
   'monthly_ai_credits', 'asset_storage_mb', 'monthly_form_submissions',
   'custom_domains', 'published_sites', 'version_history_retention_days',
-];
+] as const satisfies readonly EntitlementKey[];
 
 function formatPrice(price: { amount: number; currency: string; interval: 'month' | 'year' } | null): string {
   if (!price) return '—';
@@ -55,7 +55,7 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
   const [grantCredits, setGrantCredits] = useState('100');
   const [grantReason, setGrantReason] = useState('');
   const [entPlan, setEntPlan] = useState<PlanKey>('starter');
-  const [entKey, setEntKey] = useState('monthly_ai_credits');
+  const [entKey, setEntKey] = useState<EntitlementKey>('monthly_ai_credits');
   const [entValue, setEntValue] = useState('');
   const [entReason, setEntReason] = useState('');
 
@@ -76,7 +76,7 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
     setBusy(planKey);
     const result = await startCheckout(planKey);
     setBusy(null);
-    if (result.ok) goExternal(result.url);
+    if (result.ok === true) goExternal(result.url);
     else onNotify(result.message);
   };
 
@@ -85,7 +85,7 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
     setBusy('portal');
     const result = await openBillingPortal();
     setBusy(null);
-    if (result.ok) goExternal(result.url);
+    if (result.ok === true) goExternal(result.url);
     else onNotify(result.message);
   };
 
@@ -93,19 +93,19 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
     if (!grantUserId.trim() || Number(grantCredits) <= 0) return onNotify('Enter a user ID and positive credits');
     const result = await adminGrantCredits(grantUserId.trim(), Number(grantCredits), grantReason.trim());
     onNotify(result.message);
-    if (result.ok) { setGrantUserId(''); setGrantCredits('100'); setGrantReason(''); void refresh(); }
+    if (result.ok === true) { setGrantUserId(''); setGrantCredits('100'); setGrantReason(''); void refresh(); }
   };
 
   const doEntitlement = async () => {
     if (!entReason.trim()) return onNotify('A reason is required for entitlement changes');
     const result = await adminUpdateEntitlement({
       planKey: entPlan,
-      entitlementKey: entKey as typeof ENTITLEMENT_KEYS[number],
+      entitlementKey: entKey,
       limitValue: entValue.trim() === '' || entValue.trim() === 'null' ? null : Number(entValue),
       reason: entReason.trim(),
     });
     onNotify(result.message);
-    if (result.ok) { setEntReason(''); void refresh(); }
+    if (result.ok === true) { setEntReason(''); void refresh(); }
   };
 
   if (loading) {
@@ -216,7 +216,7 @@ export default function UsagePanel({ onNotify }: UsagePanelProps) {
                     </select>
                   </label>
                   <label className="fb-label">Entitlement
-                    <select value={entKey} onChange={(e) => setEntKey(e.target.value)}>
+                    <select value={entKey} onChange={(e) => { const key = ENTITLEMENT_KEYS.find((key) => key === e.target.value); if (key) setEntKey(key); }}>
                       {ENTITLEMENT_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}
                     </select>
                   </label>

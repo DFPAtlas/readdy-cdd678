@@ -241,8 +241,7 @@ async function logMembershipEvent(
       entity_id: null,
       safe_metadata: safe,
     })
-    .then(() => undefined)
-    .catch(() => undefined);
+    .then(() => undefined, () => undefined);
 }
 
 export async function createProjectInvitation(

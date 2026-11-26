@@ -34,7 +34,7 @@ export default function AdminLogin() {
     let cancelled = false;
     adminApi.whoami().then((res) => {
       if (cancelled) return;
-      if (res.ok) navigate('/forge-admin', { replace: true });
+      if (res.ok === true) navigate('/forge-admin', { replace: true });
     });
     return () => {
       cancelled = true;
@@ -85,7 +85,7 @@ export default function AdminLogin() {
 
       // Verify this account actually holds a platform admin role.
       const whoami = await adminApi.whoami();
-      if (whoami.ok) {
+      if (whoami.ok === true) {
         navigate('/forge-admin', { replace: true });
         return;
       }

@@ -27,8 +27,8 @@ export function AgentsPage() {
     setLoading(true);
     setError('');
     const [a, c, p] = await Promise.all([integrationsApi.agents(), integrationsApi.list(), integrationsApi.agentPermissions()]);
-    if (!a.ok || !c.ok || !p.ok) {
-      setError(!a.ok ? a.message : !c.ok ? c.message : p.message);
+    if (a.ok === false || c.ok === false || p.ok === false) {
+      setError(a.ok === false ? a.message : c.ok === false ? c.message : p.ok === false ? p.message : '');
       setLoading(false);
       return;
     }
@@ -64,7 +64,7 @@ export function AgentsPage() {
     setFeedback('');
     const res = await integrationsApi.setAgentPermission({ connectionId, agentId, accessLevel: level, enabled: level !== 'none' });
     setSaving(false);
-    if (res.ok) {
+    if (res.ok === true) {
       setFeedback('Permissions updated');
       void load();
     } else {
@@ -78,7 +78,7 @@ export function AgentsPage() {
     setFeedback('');
     const res = await integrationsApi.setAgentStatus(agentId, active ? 'active' : 'disabled');
     setSaving(false);
-    if (res.ok) {
+    if (res.ok === true) {
       setFeedback('Agent status updated');
       void load();
     } else {
@@ -96,7 +96,7 @@ export function AgentsPage() {
     setFeedback('');
     const res = await integrationsApi.setAgentEnvironments(selected.id, draftEnvs);
     setSaving(false);
-    if (res.ok) {
+    if (res.ok === true) {
       setFeedback('Environments updated');
       void load();
     } else {

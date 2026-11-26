@@ -15,10 +15,11 @@ export type VersionSource =
   | 'publish'
   | 'restore'
   | 'import'
-  | 'theme';
+  | 'theme'
+  | 'template';
 
 export const VERSION_SOURCES: VersionSource[] = [
-  'manual', 'autosave', 'ai', 'page', 'component', 'asset', 'publish', 'restore', 'import', 'theme',
+  'manual', 'autosave', 'ai', 'page', 'component', 'asset', 'publish', 'restore', 'import', 'theme', 'template',
 ];
 
 export const VERSION_SOURCE_LABELS: Record<VersionSource, string> = {
@@ -32,6 +33,7 @@ export const VERSION_SOURCE_LABELS: Record<VersionSource, string> = {
   restore: 'Restore',
   import: 'Import',
   theme: 'Theme update',
+  template: 'Template installation',
 };
 
 export type VersionEntry = {

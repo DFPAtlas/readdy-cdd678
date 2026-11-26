@@ -57,14 +57,16 @@ export function ApiKeysPage() {
       credentialsApi.list(),
       credentialsApi.activity(),
     ]);
-    if (prov.ok && list.ok && act.ok) {
+    if (prov.ok === true && list.ok === true && act.ok === true) {
       setProviders(prov.data.providers);
       setCredentials(list.data.credentials);
       setActivity(act.data.activity);
     } else {
-      const failed = !prov.ok ? prov : !list.ok ? list : act;
-      setErrorCode(failed.code);
-      setError(failed.message);
+      const failed = prov.ok === false ? prov : list.ok === false ? list : act.ok === false ? act : null;
+      if (failed) {
+        setErrorCode(failed.code);
+        setError(failed.message);
+      }
     }
     setLoading(false);
   }, []);
@@ -97,8 +99,8 @@ export function ApiKeysPage() {
     setBusyAction(`test:${cred.id}`);
     const res = await credentialsApi.testStored(cred.id);
     setBusyAction(null);
-    if (res.ok) {
-      setFeedback({ tone: res.data.ok ? 'success' : 'error', text: res.data.ok ? 'Connection successful.' : res.data.message });
+    if (res.ok === true) {
+      setFeedback({ tone: res.data.ok === true ? 'success' : 'error', text: res.data.ok === true ? 'Connection successful.' : res.data.message });
     } else {
       setFeedback({ tone: 'error', text: res.message });
     }
@@ -109,7 +111,7 @@ export function ApiKeysPage() {
     setBusyAction(`enable:${cred.id}`);
     const res = await credentialsApi.enable(cred.id);
     setBusyAction(null);
-    setFeedback(res.ok ? { tone: 'success', text: 'Credential enabled.' } : { tone: 'error', text: res.message });
+    setFeedback(res.ok === true ? { tone: 'success', text: 'Credential enabled.' } : { tone: 'error', text: res.message });
     load();
   };
 
@@ -119,7 +121,7 @@ export function ApiKeysPage() {
     const res = await credentialsApi.disable(disableTarget.id);
     setBusyAction(null);
     setDisableTarget(null);
-    setFeedback(res.ok ? { tone: 'success', text: 'Credential disabled.' } : { tone: 'error', text: res.message });
+    setFeedback(res.ok === true ? { tone: 'success', text: 'Credential disabled.' } : { tone: 'error', text: res.message });
     load();
   };
 
@@ -132,7 +134,7 @@ export function ApiKeysPage() {
     setBusyAction(null);
     setRemoveTarget(null);
     setRemoveText('');
-    setFeedback(res.ok ? { tone: 'success', text: 'Credential removed.' } : { tone: 'error', text: res.message });
+    setFeedback(res.ok === true ? { tone: 'success', text: 'Credential removed.' } : { tone: 'error', text: res.message });
     load();
   };
 

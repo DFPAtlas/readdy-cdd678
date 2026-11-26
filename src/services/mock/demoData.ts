@@ -563,45 +563,6 @@ export interface DemoFileNode {
   content?: string;
 }
 
-export const demoFileTree: DemoFileNode = {
-  id: 'root', name: 'forge-product-website', path: '', type: 'folder',
-  children: [
-    { id: 'f-public', name: 'public', path: 'public', type: 'folder', children: [
-      { id: 'f-favicon', name: 'favicon.ico', path: 'public/favicon.ico', type: 'file' },
-      { id: 'f-robots', name: 'robots.txt', path: 'public/robots.txt', type: 'file' },
-    ]},
-    { id: 'f-src', name: 'src', path: 'src', type: 'folder', children: [
-      { id: 'f-components', name: 'components', path: 'src/components', type: 'folder', children: [
-        { id: 'f-hero', name: 'Hero.tsx', path: 'src/components/Hero.tsx', type: 'file', content: DEMO_HERO_FILE },
-        { id: 'f-nav', name: 'Navigation.tsx', path: 'src/components/Navigation.tsx', type: 'file' },
-        { id: 'f-footer', name: 'Footer.tsx', path: 'src/components/Footer.tsx', type: 'file' },
-        { id: 'f-features', name: 'Features.tsx', path: 'src/components/Features.tsx', type: 'file' },
-        { id: 'f-pricing', name: 'Pricing.tsx', path: 'src/components/Pricing.tsx', type: 'file' },
-        { id: 'f-testimonials', name: 'Testimonials.tsx', path: 'src/components/Testimonials.tsx', type: 'file' },
-      ]},
-      { id: 'f-pages', name: 'pages', path: 'src/pages', type: 'folder', children: [
-        { id: 'f-home', name: 'Home.tsx', path: 'src/pages/Home.tsx', type: 'file' },
-        { id: 'f-features-page', name: 'Features.tsx', path: 'src/pages/Features.tsx', type: 'file' },
-        { id: 'f-pricing-page', name: 'Pricing.tsx', path: 'src/pages/Pricing.tsx', type: 'file' },
-        { id: 'f-docs', name: 'Docs.tsx', path: 'src/pages/Docs.tsx', type: 'file' },
-        { id: 'f-contact', name: 'Contact.tsx', path: 'src/pages/Contact.tsx', type: 'file' },
-      ]},
-      { id: 'f-hooks', name: 'hooks', path: 'src/hooks', type: 'folder', children: [
-        { id: 'f-useTheme', name: 'useTheme.ts', path: 'src/hooks/useTheme.ts', type: 'file' },
-      ]},
-      { id: 'f-styles', name: 'styles', path: 'src/styles', type: 'folder', children: [
-        { id: 'f-globals', name: 'globals.css', path: 'src/styles/globals.css', type: 'file' },
-      ]},
-      { id: 'f-app', name: 'App.tsx', path: 'src/App.tsx', type: 'file' },
-      { id: 'f-main', name: 'main.tsx', path: 'src/main.tsx', type: 'file' },
-    ]},
-    { id: 'f-pkg', name: 'package.json', path: 'package.json', type: 'file' },
-    { id: 'f-vite-config', name: 'vite.config.ts', path: 'vite.config.ts', type: 'file' },
-    { id: 'f-tailwind', name: 'tailwind.config.ts', path: 'tailwind.config.ts', type: 'file' },
-    { id: 'f-readme', name: 'README.md', path: 'README.md', type: 'file' },
-  ],
-};
-
 export const DEMO_HERO_FILE = `import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
@@ -663,3 +624,42 @@ export default function Hero() {
     </section>
   );
 }`;
+
+export const demoFileTree: DemoFileNode = {
+  id: 'root', name: 'forge-product-website', path: '', type: 'folder',
+  children: [
+    { id: 'f-public', name: 'public', path: 'public', type: 'folder', children: [
+      { id: 'f-favicon', name: 'favicon.ico', path: 'public/favicon.ico', type: 'file' },
+      { id: 'f-robots', name: 'robots.txt', path: 'public/robots.txt', type: 'file' },
+    ]},
+    { id: 'f-src', name: 'src', path: 'src', type: 'folder', children: [
+      { id: 'f-components', name: 'components', path: 'src/components', type: 'folder', children: [
+        { id: 'f-hero', name: 'Hero.tsx', path: 'src/components/Hero.tsx', type: 'file', content: DEMO_HERO_FILE },
+        { id: 'f-nav', name: 'Navigation.tsx', path: 'src/components/Navigation.tsx', type: 'file' },
+        { id: 'f-footer', name: 'Footer.tsx', path: 'src/components/Footer.tsx', type: 'file' },
+        { id: 'f-features', name: 'Features.tsx', path: 'src/components/Features.tsx', type: 'file' },
+        { id: 'f-pricing', name: 'Pricing.tsx', path: 'src/components/Pricing.tsx', type: 'file' },
+        { id: 'f-testimonials', name: 'Testimonials.tsx', path: 'src/components/Testimonials.tsx', type: 'file' },
+      ]},
+      { id: 'f-pages', name: 'pages', path: 'src/pages', type: 'folder', children: [
+        { id: 'f-home', name: 'Home.tsx', path: 'src/pages/Home.tsx', type: 'file' },
+        { id: 'f-features-page', name: 'Features.tsx', path: 'src/pages/Features.tsx', type: 'file' },
+        { id: 'f-pricing-page', name: 'Pricing.tsx', path: 'src/pages/Pricing.tsx', type: 'file' },
+        { id: 'f-docs', name: 'Docs.tsx', path: 'src/pages/Docs.tsx', type: 'file' },
+        { id: 'f-contact', name: 'Contact.tsx', path: 'src/pages/Contact.tsx', type: 'file' },
+      ]},
+      { id: 'f-hooks', name: 'hooks', path: 'src/hooks', type: 'folder', children: [
+        { id: 'f-useTheme', name: 'useTheme.ts', path: 'src/hooks/useTheme.ts', type: 'file' },
+      ]},
+      { id: 'f-styles', name: 'styles', path: 'src/styles', type: 'folder', children: [
+        { id: 'f-globals', name: 'globals.css', path: 'src/styles/globals.css', type: 'file' },
+      ]},
+      { id: 'f-app', name: 'App.tsx', path: 'src/App.tsx', type: 'file' },
+      { id: 'f-main', name: 'main.tsx', path: 'src/main.tsx', type: 'file' },
+    ]},
+    { id: 'f-pkg', name: 'package.json', path: 'package.json', type: 'file' },
+    { id: 'f-vite-config', name: 'vite.config.ts', path: 'vite.config.ts', type: 'file' },
+    { id: 'f-tailwind', name: 'tailwind.config.ts', path: 'tailwind.config.ts', type: 'file' },
+    { id: 'f-readme', name: 'README.md', path: 'README.md', type: 'file' },
+  ],
+};

@@ -9,7 +9,7 @@ interface TooltipProps {
 
 export function Tooltip({ content, children, position = 'bottom', delay = 400 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const positionClasses = {
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-1.5',
