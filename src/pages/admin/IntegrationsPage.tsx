@@ -71,12 +71,12 @@ export function IntegrationsPage() {
     setLoading(true);
     setError('');
     const [cat, list, oauth] = await Promise.all([integrationsApi.catalog(), integrationsApi.list(), integrationsApi.oauthProviders()]);
-    if (cat.ok && list.ok && oauth.ok) {
+    if (cat.ok === true && list.ok === true && oauth.ok === true) {
       setProviders(cat.data.providers);
       setConnections(list.data.connections);
       setOauthProviders(oauth.data.providers);
     } else {
-      setError((!cat.ok ? cat.message : !list.ok ? list.message : oauth.message));
+      setError((cat.ok === false ? cat.message : list.ok === false ? list.message : oauth.ok === false ? oauth.message : ''));
     }
     setLoading(false);
   }, []);
@@ -118,7 +118,7 @@ export function IntegrationsPage() {
     setFeedback('');
     const res = await integrationsApi.testStored(conn.id);
     setTestingId(null);
-    if (res.ok) {
+    if (res.ok === true) {
       setTestStates((s) => ({ ...s, [conn.id]: res.data.result }));
       load();
     } else {
@@ -136,7 +136,7 @@ export function IntegrationsPage() {
       : await integrationsApi.disable(disableTarget.id, isProd);
     setBusy(false);
     setDisableTarget(null);
-    setFeedback(res.ok ? 'Updated.' : res.message);
+    setFeedback(res.ok === true ? 'Updated.' : res.message);
     load();
   };
 
@@ -150,7 +150,7 @@ export function IntegrationsPage() {
     setBusy(false);
     setDeleteTarget(null);
     setDeleteText('');
-    setFeedback(res.ok ? 'Integration deleted.' : res.message);
+    setFeedback(res.ok === true ? 'Integration deleted.' : res.message);
     load();
   };
 
@@ -167,7 +167,7 @@ export function IntegrationsPage() {
     setBusy(false);
     setCloneTarget(null);
     setCloneName('');
-    setFeedback(res.ok ? 'Configuration copied. The new connection needs its own credential.' : res.message);
+    setFeedback(res.ok === true ? 'Configuration copied. The new connection needs its own credential.' : res.message);
     load();
   };
 
@@ -269,9 +269,9 @@ export function IntegrationsPage() {
                 </div>
 
                 {test && (
-                  <div className={`rounded-md px-3 py-2 text-xs ${test.ok ? 'bg-forge-success/10 text-forge-success' : 'bg-forge-error/10 text-forge-error'}`} role="status">
-                    <span className="font-medium">{test.ok ? 'Connection successful' : 'Connection failed'}</span>
-                    <span className="text-forge-text-secondary"> · {test.ok ? `${test.latencyMs}ms` : test.message}</span>
+                  <div className={`rounded-md px-3 py-2 text-xs ${test.ok === true ? 'bg-forge-success/10 text-forge-success' : 'bg-forge-error/10 text-forge-error'}`} role="status">
+                    <span className="font-medium">{test.ok === true ? 'Connection successful' : 'Connection failed'}</span>
+                    <span className="text-forge-text-secondary"> · {test.ok === true ? `${test.latencyMs}ms` : test.message}</span>
                   </div>
                 )}
 

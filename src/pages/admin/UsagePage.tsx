@@ -22,9 +22,9 @@ export default function UsagePage() {
     setLoading(true);
     setError('');
     const [s, c] = await Promise.all([adminApi.usageSummary(), adminApi.usageCustomers({ page, pageSize: PAGE_SIZE })]);
-    if (s.ok) setSummary(s.data.summary);
+    if (s.ok === true) setSummary(s.data.summary);
     else setError(s.message);
-    if (c.ok) { setRows(c.data.customers); setTotal(c.data.total); }
+    if (c.ok === true) { setRows(c.data.customers); setTotal(c.data.total); }
     else if (!error) setError(c.message);
     setLoading(false);
   }, [page]);

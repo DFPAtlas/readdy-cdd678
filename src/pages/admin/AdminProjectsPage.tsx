@@ -36,7 +36,7 @@ export default function AdminProjectsPage() {
     setLoading(true);
     setError('');
     const res = await adminApi.projectsList({ query, status: status || undefined, plan: plan || undefined, buildState: buildState || undefined, page, pageSize: PAGE_SIZE });
-    if (res.ok) {
+    if (res.ok === true) {
       setRows(res.data.projects);
       setSummary(res.data.summary);
       setTotal(res.data.total);
@@ -54,7 +54,7 @@ export default function AdminProjectsPage() {
     setDetailLoading(true);
     setFeedback('');
     const res = await adminApi.projectGet(id);
-    if (res.ok) setDetail(res.data.project);
+    if (res.ok === true) setDetail(res.data.project);
     else setFeedback(res.message);
     setDetailLoading(false);
   };
@@ -63,7 +63,7 @@ export default function AdminProjectsPage() {
     const reason = window.prompt('Reason for this support session?');
     if (!reason || !reason.trim()) return;
     const res = await adminApi.supportStart(projectId, reason.trim(), 30);
-    setFeedback(res.ok ? 'Support mode started (read-only, 30 min).' : res.message);
+    setFeedback(res.ok === true ? 'Support mode started (read-only, 30 min).' : res.message);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

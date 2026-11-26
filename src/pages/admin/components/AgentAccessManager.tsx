@@ -28,8 +28,8 @@ export function AgentAccessManager({ connection, onChanged }: Props) {
     setLoading(true);
     setError('');
     const [a, p] = await Promise.all([integrationsApi.agents(), integrationsApi.agentPermissions(connection.id)]);
-    if (!a.ok || !p.ok) {
-      setError(!a.ok ? a.message : p.message);
+    if (a.ok === false || p.ok === false) {
+      setError(a.ok === false ? a.message : p.ok === false ? p.message : '');
       setLoading(false);
       return;
     }
@@ -63,7 +63,7 @@ export function AgentAccessManager({ connection, onChanged }: Props) {
     for (const agent of agents) {
       const p = permMap[agent.id] ?? { accessLevel: 'none' as AccessLevel, enabled: false };
       const res = await integrationsApi.setAgentPermission({ connectionId: connection.id, agentId: agent.id, accessLevel: p.accessLevel, enabled: p.enabled });
-      if (!res.ok) {
+      if (res.ok === false) {
         setFeedback({ tone: 'error', text: res.message });
         setSaving(false);
         return;
@@ -77,7 +77,7 @@ export function AgentAccessManager({ connection, onChanged }: Props) {
   const selectAll = async () => {
     setFeedback(null);
     const res = await integrationsApi.bulkSetPermissions({ connectionId: connection.id, agentIds: agents.map((a) => a.id), accessLevel: 'execute', enabled: true, confirmSensitive: true });
-    if (res.ok) {
+    if (res.ok === true) {
       setFeedback({ tone: 'success', text: 'Permissions updated' });
       onChanged?.();
       void load();
@@ -89,7 +89,7 @@ export function AgentAccessManager({ connection, onChanged }: Props) {
   const clearAll = async () => {
     setFeedback(null);
     const res = await integrationsApi.bulkSetPermissions({ connectionId: connection.id, agentIds: agents.map((a) => a.id), accessLevel: 'none', enabled: false });
-    if (res.ok) {
+    if (res.ok === true) {
       setFeedback({ tone: 'success', text: 'Permissions updated' });
       onChanged?.();
       void load();

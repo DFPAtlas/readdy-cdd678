@@ -272,7 +272,7 @@ export async function fetchProjectOverview(projectId: string): Promise<ProjectOv
   }
 
   for (const b of builds) {
-    if (!b.started_at) continue;
+    if (!b.startedAt) continue;
     const description =
       b.status === 'success' ? 'Build completed'
         : b.status === 'failed' ? 'Build failed'
@@ -284,23 +284,23 @@ export async function fetchProjectOverview(projectId: string): Promise<ProjectOv
       kind: 'build',
       description,
       area: b.version ? `Build ${b.version}` : 'Builds',
-      timestamp: b.started_at,
+      timestamp: b.startedAt,
     });
   }
 
   for (const v of versions) {
-    if (!v.created_at) continue;
+    if (!v.createdAt) continue;
     activity.push({
       id: `version-${v.id}`,
       kind: 'version',
       description: 'Version created',
       area: versionShortLabel(v) ?? undefined,
-      timestamp: v.created_at,
+      timestamp: v.createdAt,
     });
   }
 
   for (const j of aiJobs) {
-    if (!j.created_at) continue;
+    if (!j.createdAt) continue;
     const description =
       j.status === 'completed' ? 'AI task completed'
         : j.status === 'failed' ? 'AI task failed'
@@ -311,7 +311,7 @@ export async function fetchProjectOverview(projectId: string): Promise<ProjectOv
       kind: 'ai',
       description,
       area: j.taskType ?? 'AI',
-      timestamp: j.created_at,
+      timestamp: j.createdAt,
     });
   }
 

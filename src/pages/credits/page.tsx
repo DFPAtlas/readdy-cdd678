@@ -142,7 +142,7 @@ export default function CreditsPage() {
       }
       const requestKey = crypto.randomUUID();
       const result = await createCreditTopupSession(pack.key, requestKey);
-      if (result.ok) {
+      if (result.ok === true) {
         openExternal(result.url);
         return;
       }

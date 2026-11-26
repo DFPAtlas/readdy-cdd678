@@ -80,7 +80,7 @@ export default function SettingsBillingPage() {
     setPortalError(null);
     try {
       const result = await openBillingPortal();
-      if (result.ok) {
+      if (result.ok === true) {
         openExternal(result.url);
         return;
       }

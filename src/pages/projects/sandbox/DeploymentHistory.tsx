@@ -59,7 +59,7 @@ export default function DeploymentHistory({ onNotify }: { onNotify: (message: st
     const result = await rollbackDeployment(confirm.deployment.id);
     setBusyId(null);
     setConfirm(null);
-    onNotify(result.ok ? 'Rollback requested' : result.message);
+    onNotify(result.ok === true ? 'Rollback requested' : result.message);
     void refresh();
   };
 
@@ -69,7 +69,7 @@ export default function DeploymentHistory({ onNotify }: { onNotify: (message: st
     const result = await unpublishDeployment(confirm.deployment.id);
     setBusyId(null);
     setConfirm(null);
-    onNotify(result.ok ? 'Unpublish requested' : result.message);
+    onNotify(result.ok === true ? 'Unpublish requested' : result.message);
     void refresh();
   };
 

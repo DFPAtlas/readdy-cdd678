@@ -3,7 +3,7 @@ import {
   Boxes, Copy, Download, GitBranch, Grid2X2, Layers, List, MoreVertical,
   Pencil, Plus, Puzzle, Search, Trash2,
 } from 'lucide-react';
-import type { ComponentDefinition, SandboxPage } from './sandboxPersistence';
+import type { ComponentCategory, ComponentDefinition, SandboxPage } from './sandboxPersistence';
 import { BUILT_IN_COMPONENTS, componentInstanceCount } from './sandboxComponents';
 
 type ComponentsPanelProps = {
@@ -45,7 +45,7 @@ export default function ComponentsPanel(props: ComponentsPanelProps) {
     });
   }, [all, query, category]);
 
-  const categories = useMemo(() => ['All', ...Array.from(new Set(all.map((component) => component.category)))], [all]);
+  const categories = useMemo<Array<'All' | ComponentCategory>>(() => ['All', ...Array.from(new Set(all.map((component) => component.category)))], [all]);
 
   const startRename = (component: ComponentDefinition) => {
     setRenamingId(component.id);

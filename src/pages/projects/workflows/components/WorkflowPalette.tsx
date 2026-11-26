@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import type { WorkflowNode, WorkflowConnection } from '../workflowTypes';
+import type { NodeCatalogItem, WorkflowNode, WorkflowConnection } from '../workflowTypes';
 import { NODE_CATEGORIES, TRIGGER_TYPES, CONDITION_TYPES, ACTION_TYPES, SINGLE_NODES } from '../workflowTypes';
 
 /* ── Editable config fields per node type ── */
@@ -46,7 +46,7 @@ export const CONDITION_FIELDS: ConfigField[] = [
 
 /* ── Palette ── */
 
-type PaletteItem = { type: string; label: string; description: string };
+type PaletteItem = NodeCatalogItem;
 
 function Group({ title, items, onAdd }: { title: string; items: PaletteItem[]; onAdd: (item: PaletteItem) => void }) {
   return (
@@ -74,7 +74,7 @@ export function NodePalette({ onAdd }: { onAdd: (type: string, category: Workflo
       <Group title="Triggers" items={TRIGGER_TYPES} onAdd={(i) => onAdd(i.type, 'trigger', i.label)} />
       <Group title="Conditions" items={CONDITION_TYPES} onAdd={(i) => onAdd(i.type, 'condition', i.label)} />
       <Group title="Actions" items={ACTION_TYPES} onAdd={(i) => onAdd(i.type, 'action', i.label)} />
-      <Group title="Flow" items={SINGLE_NODES} onAdd={(i) => onAdd(i.type, i.category as WorkflowNode['category'], i.label)} />
+      <Group title="Flow" items={SINGLE_NODES} onAdd={(i) => onAdd(i.type, i.category, i.label)} />
     </div>
   );
 }

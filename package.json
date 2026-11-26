@@ -12,7 +12,8 @@
     "react-i18next": "^15.6.0",
     "react-router-dom": "^7.6.3",
     "recharts": "3.2.0",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "@supabase/functions-js": "2.4.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

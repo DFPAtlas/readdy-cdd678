@@ -32,7 +32,7 @@ function AiOps({ canOperate }: { canOperate: boolean }) {
     setLoading(true);
     setError('');
     const res = await adminApi.aiOverview();
-    if (res.ok) setData(res.data);
+    if (res.ok === true) setData(res.data);
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -42,7 +42,7 @@ function AiOps({ canOperate }: { canOperate: boolean }) {
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>) => {
     setFeedback('');
     const res = await fn();
-    setFeedback(res.ok ? 'Updated.' : res.message ?? 'Action failed.');
+    setFeedback(res.ok === true ? 'Updated.' : res.message ?? 'Action failed.');
     load();
   };
 
@@ -182,7 +182,7 @@ function DeployOps({ canOperate }: { canOperate: boolean }) {
     setLoading(true);
     setError('');
     const res = await adminApi.deploymentsList();
-    if (res.ok) { setDeployments(res.data.deployments); setFlags(res.data.flags); }
+    if (res.ok === true) { setDeployments(res.data.deployments); setFlags(res.data.flags); }
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -192,7 +192,7 @@ function DeployOps({ canOperate }: { canOperate: boolean }) {
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>) => {
     setFeedback('');
     const res = await fn();
-    setFeedback(res.ok ? 'Done.' : res.message ?? 'Action failed.');
+    setFeedback(res.ok === true ? 'Done.' : res.message ?? 'Action failed.');
     load();
   };
 

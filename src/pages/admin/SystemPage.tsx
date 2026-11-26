@@ -28,7 +28,7 @@ export default function SystemPage() {
     setLoading(true);
     setError('');
     const res = await adminApi.health();
-    if (res.ok) setHealth(res.data);
+    if (res.ok === true) setHealth(res.data);
     else setError(res.message);
     setLoading(false);
   }, []);

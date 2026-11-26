@@ -16,7 +16,7 @@ type Props = {
 };
 
 function TestResultBox({ result }: { result: CredentialTest }) {
-  const ok = result.ok;
+  const ok = result.ok === true;
   return (
     <div className={`rounded-md p-3 text-xs leading-relaxed ${ok ? 'bg-forge-success/10 text-forge-success' : 'bg-forge-error/10 text-forge-error'}`} role="status">
       <div className="flex items-start gap-2">
@@ -75,9 +75,9 @@ export function CredentialFormModal({ mode, open, provider, credential, defaultE
     setTestedOk(false);
     const res = await credentialsApi.test(provider.key, secret.trim(), needsBaseUrl ? baseUrl.trim() || undefined : undefined);
     setBusy('idle');
-    if (res.ok) {
+    if (res.ok === true) {
       setTestResult(res.data);
-      setTestedOk(res.data.ok);
+      setTestedOk(res.data.ok === true);
     } else {
       setError(res.message);
     }
@@ -96,7 +96,7 @@ export function CredentialFormModal({ mode, open, provider, credential, defaultE
     const res = isReplace ? await credentialsApi.replace(payload) : await credentialsApi.save(payload);
     setBusy('idle');
     clearSecret();
-    if (res.ok) {
+    if (res.ok === true) {
       onSaved();
       onClose();
     } else {

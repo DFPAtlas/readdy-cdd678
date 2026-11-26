@@ -39,7 +39,7 @@ export default function AnnouncementsPage() {
     setLoading(true);
     setError('');
     const res = await adminApi.flagsList();
-    if (res.ok) setFlags(res.data.flags.filter((f) => f.flag_key.startsWith('announcement.')));
+    if (res.ok === true) setFlags(res.data.flags.filter((f) => f.flag_key.startsWith('announcement.')));
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -57,8 +57,8 @@ export default function AnnouncementsPage() {
       title: title.trim(), message: message.trim(), audience, startsAt: startsAt || null, endsAt: endsAt || null,
     });
     setBusy(false);
-    setFeedback(res.ok ? 'Announcement published.' : res.message);
-    if (res.ok) { setTitle(''); setMessage(''); setStartsAt(''); setEndsAt(''); }
+    setFeedback(res.ok === true ? 'Announcement published.' : res.message);
+    if (res.ok === true) { setTitle(''); setMessage(''); setStartsAt(''); setEndsAt(''); }
     load();
   };
 
@@ -67,7 +67,7 @@ export default function AnnouncementsPage() {
     if (reason === null) return;
     setFeedback('');
     const res = await adminApi.flagsSet(flagKey, enabled, reason);
-    setFeedback(res.ok ? 'Updated.' : res.message);
+    setFeedback(res.ok === true ? 'Updated.' : res.message);
     load();
   };
 

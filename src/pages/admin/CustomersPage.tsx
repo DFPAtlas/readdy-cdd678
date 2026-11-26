@@ -34,7 +34,7 @@ export default function CustomersPage() {
     setLoading(true);
     setError('');
     const res = await adminApi.customersList({ query, plan: plan || undefined, status: status || undefined, page, pageSize: PAGE_SIZE });
-    if (res.ok) {
+    if (res.ok === true) {
       setRows(res.data.customers);
       setSummary(res.data.summary);
       setTotal(res.data.total);
@@ -52,7 +52,7 @@ export default function CustomersPage() {
     setDetailLoading(true);
     setFeedback('');
     const res = await adminApi.customersGet(userId);
-    if (res.ok) setDetail(res.data.customer);
+    if (res.ok === true) setDetail(res.data.customer);
     else setFeedback(res.message);
     setDetailLoading(false);
   };
@@ -60,8 +60,8 @@ export default function CustomersPage() {
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>, label: string) => {
     setFeedback('');
     const res = await fn();
-    setFeedback(res.ok ? label : res.message ?? 'Action failed.');
-    if (res.ok) load();
+    setFeedback(res.ok === true ? label : res.message ?? 'Action failed.');
+    if (res.ok === true) load();
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

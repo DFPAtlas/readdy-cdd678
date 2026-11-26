@@ -22,7 +22,7 @@ export function IncidentsSection() {
     setLoading(true);
     setError('');
     const res = await adminApi.incidentsList();
-    if (res.ok) setIncidents(res.data.incidents);
+    if (res.ok === true) setIncidents(res.data.incidents);
     else setError(res.message);
     setLoading(false);
   }, []);
@@ -34,7 +34,7 @@ export function IncidentsSection() {
     if (msg === null) return;
     setFeedback('');
     const res = await adminApi.incidentsUpdate(id, status, msg);
-    setFeedback(res.ok ? 'Incident updated.' : res.message);
+    setFeedback(res.ok === true ? 'Incident updated.' : res.message);
     load();
   };
 
@@ -106,7 +106,7 @@ function CreateIncident({ onDone }: { onDone: () => void }) {
     setBusy(true);
     const res = await adminApi.incidentsCreate(severity, title, affected);
     setBusy(false);
-    if (res.ok) onDone();
+    if (res.ok === true) onDone();
     else setFeedback(res.message);
   };
 

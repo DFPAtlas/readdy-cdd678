@@ -48,7 +48,7 @@ export function OAuthConnectModal({ provider, connection, open, onClose }: Props
       connectionId: isReconnect ? connection?.id : undefined,
     });
     setBusy(false);
-    if (res.ok) {
+    if (res.ok === true) {
       window.location.assign(res.data.url);
     } else {
       setError(res.message);
