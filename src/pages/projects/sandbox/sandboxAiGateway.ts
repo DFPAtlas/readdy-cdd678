@@ -1,4 +1,4 @@
-import { getSandboxClient, resolveSandboxProject, type ResolvedSandboxProject } from './sandboxPersistence';
+import { getSandboxClient, resolveSandboxProject } from './sandboxPersistence';
 import type { SandboxAiProposal, SandboxAiOperation, SandboxComponentOperation, SandboxPageOperation } from './sandboxAi';
 
 export type AiTaskClass = 'fast_edit' | 'standard' | 'complex' | 'copywriting' | 'seo' | 'accessibility' | 'image_alt' | 'local';
@@ -44,21 +44,14 @@ export type AiGatewayOutcome = {
   localFallbackAvailable: boolean;
 };
 
-let cachedProject: ResolvedSandboxProject | null | undefined;
 
 function baseUsage(mode: AiMode, durationMs = 0): AiUsage {
   return { mode, inputTokens: 0, outputTokens: 0, estimatedCostMicros: 0, durationMs };
 }
 
 async function resolveProjectId(): Promise<string | null> {
-  if (cachedProject !== undefined && cachedProject !== null) return cachedProject.projectId;
-  try {
-    cachedProject = await resolveSandboxProject();
-    return cachedProject?.projectId ?? null;
-  } catch {
-    cachedProject = null;
-    return null;
-  }
+  const project = await resolveSandboxProject();
+  return project?.projectId ?? null;
 }
 
 function parseOutcome(data: unknown, durationMs: number): AiGatewayOutcome {

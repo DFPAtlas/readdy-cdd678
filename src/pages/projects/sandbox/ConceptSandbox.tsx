@@ -252,7 +252,8 @@ function computeLayerDepth(elements: CanvasElement[]): Map<string, number> {
   return depth;
 }
 
-export default function ForgeSandbox() {
+export default function ForgeSandbox({ projectId, initialDocument }: { projectId: string; initialDocument: SandboxDocument }) {
+  const initialPage = initialDocument.pages.find((page) => page.id === initialDocument.activePageId) ?? initialDocument.pages[0];
   // Real service health (auth, database, AI gateway), refreshed every minute.
   const [serviceHealth, setServiceHealth] = useState<ServiceHealth | null>(null);
   useEffect(() => {
@@ -289,9 +290,9 @@ export default function ForgeSandbox() {
     unknown: "Service status not verified",
   }[overallService];
   const [activeTool, setActiveTool] = useState("Add");
-  const [selectedLayer, setSelectedLayer] = useState("Hero");
+  const [selectedLayer, setSelectedLayer] = useState(initialPage?.name ?? "Home");
   const [rightTab, setRightTab] = useState<"ai" | "properties">("ai");
-  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">(initialDocument.viewport);
   const [zoom, setZoom] = useState(100);
   const [bottomTab, setBottomTab] = useState("Activity");
   const [prompt, setPrompt] = useState("Turn this hero into two columns and add a booking button");
@@ -316,9 +317,9 @@ export default function ForgeSandbox() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [promptBuilderOpen, setPromptBuilderOpen] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [history, setHistory] = useState<EditorHistory>(emptyHistory);
+  const [history, setHistory] = useState<EditorHistory>({ past: [], present: initialPage?.elements ?? [], future: [] });
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"loading" | "dirty" | "saving" | "local" | "cloud" | "error">("loading");
+  const [saveStatus, setSaveStatus] = useState<"loading" | "dirty" | "saving" | "local" | "cloud" | "error">("dirty");
   const [toast, setToast] = useState<string | null>(null);
 
   /* ── Version history state ── */
@@ -357,7 +358,7 @@ export default function ForgeSandbox() {
   const [publishPos, setPublishPos] = useState({ x: 340, y: 70, width: 560, height: 640 });
 
   /* ── Design system state ── */
-  const [theme, setTheme] = useState<ThemeDefinition>(defaultTheme);
+  const [theme, setTheme] = useState<ThemeDefinition>(initialDocument.theme ?? defaultTheme());
   const [designOpen, setDesignOpen] = useState(false);
   const [designMinimized, setDesignMinimized] = useState(false);
   const [designPos, setDesignPos] = useState({ x: 320, y: 60, width: 540, height: 660 });
@@ -394,14 +395,14 @@ export default function ForgeSandbox() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templatesMinimized, setTemplatesMinimized] = useState(false);
   const [templatesPos, setTemplatesPos] = useState({ x: 320, y: 60, width: 720, height: 720 });
-  const [projectId, setProjectId] = useState("");
+
 
   /* ── Multi-page state ── */
-  const [projectName, setProjectName] = useState("Portfolio Website");
-  const [pages, setPages] = useState<SandboxPage[]>([]);
-  const [activePageId, setActivePageId] = useState("");
+  const [projectName, setProjectName] = useState(initialDocument.projectName);
+  const [pages, setPages] = useState<SandboxPage[]>(initialDocument.pages);
+  const [activePageId, setActivePageId] = useState(initialDocument.activePageId);
   const [pageHistories, setPageHistories] = useState<Record<string, EditorHistory>>({});
-  const [globalSections, setGlobalSections] = useState<GlobalSections>({ header: [], footer: [], navigation: [] });
+  const [globalSections, setGlobalSections] = useState<GlobalSections>(initialDocument.globalSections);
 
   /* ── Dialogs ── */
   const [createPageOpen, setCreatePageOpen] = useState(false);
@@ -415,7 +416,7 @@ export default function ForgeSandbox() {
   const [previewCursor, setPreviewCursor] = useState(-1);
 
   /* ── Components state ── */
-  const [components, setComponents] = useState<ComponentDefinition[]>([]);
+  const [components, setComponents] = useState<ComponentDefinition[]>(initialDocument.components);
   const [createComponentOpen, setCreateComponentOpen] = useState(false);
   const [masterEditComponent, setMasterEditComponent] = useState<ComponentDefinition | null>(null);
   const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
@@ -443,34 +444,8 @@ export default function ForgeSandbox() {
   const chromePage = previewMode ? previewPage : activePage;
 
   useEffect(() => {
-    let active = true;
-    void loadSandboxDocument().then((document) => {
-      if (!active) return;
-      if (document) {
-        setProjectName(document.projectName);
-        setPages(document.pages);
-        setActivePageId(document.activePageId);
-        setGlobalSections(document.globalSections);
-        setComponents(document.components);
-        setTheme(document.theme ?? defaultTheme());
-        const initialPage = document.pages.find((page) => page.id === document.activePageId) ?? document.pages[0];
-        setHistory({ past: [], present: initialPage?.elements ?? [], future: [] });
-        setSelectedLayer(initialPage?.name ?? "Home");
-        setViewport(document.viewport);
-        lastChecksumRef.current = checksumDocument(document);
-      }
-      setSaveStatus(document ? "local" : "dirty");
-    });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
     const rec = loadRecovery();
     if (rec) setRecoveryData(rec);
-  }, []);
-
-  useEffect(() => {
-    void resolveSandboxProject().then((resolved) => { if (resolved) setProjectId(resolved.projectId); });
   }, []);
 
   useEffect(() => {
@@ -836,6 +811,7 @@ export default function ForgeSandbox() {
     const latestPages = pages.map((page) => page.id === activePageId ? { ...page, elements: history.present } : page);
     return {
       schemaVersion: 4,
+      projectId,
       projectName,
       activePageId,
       pages: latestPages,
@@ -998,14 +974,14 @@ export default function ForgeSandbox() {
     const document = buildDocument();
     setSaveStatus("saving");
     try {
-      const result = await saveSandboxDocument(document);
+      const result = await saveSandboxDocument(document, projectId);
       setSaveStatus(result.storage);
       baseUpdatedAtRef.current = document.updatedAt;
       await recordVersion("manual", { changeSummary: "Manual save" });
       notify(result.storage === "cloud" ? "Saved to Supabase" : "Saved locally — sign in for cloud sync");
     } catch {
       setSaveStatus("error");
-      notify("Local save complete; cloud sync needs attention");
+      notify("Save failed. Keep this page open and retry; cloud changes are not confirmed.");
     }
   };
 
@@ -1022,7 +998,7 @@ export default function ForgeSandbox() {
 
   const resolveConflictReload = async () => {
     setConflictState(null);
-    const remote = await loadSandboxDocument();
+    const remote = await loadSandboxDocument(projectId);
     if (remote) {
       applyDocumentToState(remote);
       baseUpdatedAtRef.current = remote.updatedAt;
@@ -2143,8 +2119,8 @@ export default function ForgeSandbox() {
               <div className="selection-label">{previewMode ? (previewPage?.name ?? "Preview") : selectedElement ? selectedElement.name : selectedLayer}</div>
               {!previewMode && !readOnly && (<><span className="handle tl" /><span className="handle tr" /><span className="handle bl" /><span className="handle br" /><span className="handle tm" /><span className="handle bm" /></>)}
               <article className="site-artboard">
-                {!chromePage?.advanced.hideGlobalHeader && (<nav className="site-nav">
-                  <div className="site-brand"><Gem size={22} fill="#f5a500" color="#101820" /><b>FORGE</b></div>
+                {globalSections.navigation.length > 0 && !chromePage?.advanced.hideGlobalHeader && (<nav className="site-nav">
+                  <div className="site-brand"><Gem size={22} fill="#f5a500" color="#101820" /><b>{projectName}</b></div>
                   <div className="site-links">
                     {globalSections.navigation.map((item) => {
                       const target = item.type === "page" ? pages.find((page) => page.id === item.pageId) : null;
@@ -2169,28 +2145,9 @@ export default function ForgeSandbox() {
                         </a>
                       );
                     })}
-                    {globalSections.navigation.length === 0 && (<><span>Product</span><span>Solutions</span><span>Pricing</span><span>About</span></>)}
                   </div>
-                  <div className="site-nav-actions"><button>Sign in</button><button>Start Building</button></div>
                 </nav>)}
-                <section className="site-hero" onClick={() => { setSelectedLayer("Hero"); setSelectedElementId(null); }}>
-                  <div className="hero-copy">
-                    <span className="eyebrow">AI-POWERED WEBSITE BUILDER</span>
-                    <h1>Build smarter.<br />Ship faster.</h1>
-                    <p>FORGE helps you go from idea to production with an AI-assisted, drag-and-drop builder designed for speed, flexibility, and scale.</p>
-                    <div className="hero-actions"><button>Start Building <ChevronRight size={14} /></button><button>Book a Demo <AppWindow size={13} /></button></div>
-                  </div>
-                  <div className="hero-art" role="img" aria-label="Abstract amber wave artwork">
-                    <div className="sun" /><div className="wave-lines" />
-                    <div className="drag-button"><span>Book a Demo</span><AppWindow size={14} /><MousePointer2 size={26} /></div>
-                  </div>
-                </section>
                 {!previewMode && !readOnly && (<div className={`drop-zone ${dragging ? "dragging" : ""}`}><span><Circle size={10} /> {dragging ? `Drop ${dragging} here` : "Drop section here"}</span></div>)}
-                <section className="features-row" onClick={() => { setSelectedLayer("Features"); setSelectedElementId(null); }}>
-                  <FeatureCard icon={<Zap />} title={["AI-Assisted", "Workflows"]} text="Let AI handle the heavy lifting while you stay in control of every detail." />
-                  <FeatureCard icon={<Box />} title={["Drag. Drop.", "Deploy."]} text="Build visually, customise freely, and deploy anywhere with one click." />
-                  <FeatureCard icon={<ShieldCheck />} title={["Secure by", "Design"]} text="Enterprise-grade security and performance built in." />
-                </section>
                 {globalSections.footer.length > 0 && !chromePage?.advanced.hideGlobalFooter && (
                   <section className="global-footer">
                     <span className="global-badge">Global</span>

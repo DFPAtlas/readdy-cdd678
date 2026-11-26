@@ -1,3 +1,4 @@
+import { currentProjectStorageKey } from './sandboxProjectScope';
 import { create } from 'zustand';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSandboxClient, resolveSandboxProject } from './sandboxPersistence';
@@ -60,8 +61,6 @@ const EXTENSION_MIME: Record<string, { kind: AssetKind; mimeType: string }> = {
 };
 
 const BUCKET = 'forge-assets';
-const LOCAL_META_KEY = 'forge:assets:local:v1';
-const IDB_NAME = 'forge-assets-local';
 const IDB_STORE = 'blobs';
 
 export function formatBytes(bytes: number): string {
@@ -105,7 +104,7 @@ export function validateFile(file: File): { ok: true; kind: AssetKind; mimeType:
 
 function openIdb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(IDB_NAME, 1);
+    const request = indexedDB.open(currentProjectStorageKey('asset-blobs'), 1);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(IDB_STORE)) {
         request.result.createObjectStore(IDB_STORE);
@@ -237,7 +236,7 @@ const seededAssets: AssetRecord[] = [];
 
 function loadLocalMeta(): AssetRecord[] {
   try {
-    const raw = window.localStorage.getItem(LOCAL_META_KEY);
+    const raw = window.localStorage.getItem(currentProjectStorageKey('assets'));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -250,7 +249,7 @@ function loadLocalMeta(): AssetRecord[] {
 function saveLocalMeta(assets: AssetRecord[]) {
   try {
     const localOnly = assets.filter((asset) => asset.local);
-    window.localStorage.setItem(LOCAL_META_KEY, JSON.stringify(localOnly));
+    window.localStorage.setItem(currentProjectStorageKey('assets'), JSON.stringify(localOnly));
   } catch { /* storage unavailable */ }
 }
 
@@ -316,7 +315,7 @@ export const useAssetStore = create<AssetStoreState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   load: async () => {
-    set({ loading: true, error: null });
+    set({ assets: [], loading: true, error: null });
     const supabase = getSandboxClient();
     let cloud: AssetRecord[] = [];
     let local: AssetRecord[] = [];
