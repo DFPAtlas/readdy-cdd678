@@ -1,0 +1,956 @@
+{
+  "capturedAt": "2026-11-26",
+  "projectRef": "cpjqmetlqzielplxmzzn",
+  "scope": "Read-only public-schema metadata; no user rows, credentials or restorable data.",
+  "liveTableCount": 107,
+  "sourceTableCount": 72,
+  "missingTableDefinitions": [
+    "agent_provider_routes",
+    "credential_alerts",
+    "credential_health_runs",
+    "customer_integration_audit",
+    "forge_active_requests",
+    "forge_usage_state",
+    "integration_alert_config",
+    "integration_alert_deliveries",
+    "integration_audit_log",
+    "integration_budgets",
+    "integration_credential_events",
+    "integration_health_checks",
+    "integration_incident_events",
+    "integration_incidents",
+    "integration_limits",
+    "integration_project_assignments",
+    "integration_requests",
+    "integration_template_audit",
+    "integration_template_items",
+    "integration_templates",
+    "integration_threshold_events",
+    "integration_usage_events",
+    "integration_webhook_events",
+    "integration_webhooks",
+    "plan_integration_entitlements",
+    "project_integration_audit",
+    "project_integration_permissions",
+    "project_integration_state",
+    "project_template_applications",
+    "provider_model_pricing",
+    "routing_models",
+    "workspace_entitlement_overrides",
+    "workspace_members",
+    "workspace_usage_audit",
+    "workspace_usage_events"
+  ],
+  "sourceTablesAbsentFromLive": [],
+  "rlsDisabledTables": [],
+  "liveMigrations": [
+    {
+      "version": "20260815154220",
+      "name": "harden_billing_limit_rpcs_and_add_builder_upgrade_path"
+    },
+    {
+      "version": "20260815154625",
+      "name": "use_security_invoker_for_user_billing_rpcs"
+    },
+    {
+      "version": "20261031125124",
+      "name": "profiles_insert_own"
+    },
+    {
+      "version": "20261031153427",
+      "name": "update_retired_anthropic_models"
+    }
+  ],
+  "sourceMigrationFiles": [
+    "20260815000000_forge_schema_baseline.sql",
+    "20260816000000_create_profiles_on_signup.sql",
+    "20260816000001_unify_platform_admin_authority.sql",
+    "20260816000002_integration_connections.sql",
+    "20260816000003_oauth_connections.sql",
+    "20260816000004_agent_access.sql",
+    "20260816000005_environment_separation.sql",
+    "20260818000000_platform_api_credentials.sql",
+    "20260818000001_ai_credit_topups.sql",
+    "20261031125100_profiles_insert_own.sql",
+    "20261031153400_update_retired_anthropic_models.sql"
+  ],
+  "liveTables": [
+    "admin_audit_events",
+    "agent_provider_routes",
+    "ai_agent_runs",
+    "ai_change_sets",
+    "ai_entitlements",
+    "ai_jobs",
+    "ai_models",
+    "ai_providers",
+    "ai_usage_events",
+    "assets",
+    "billing_customers",
+    "billing_events",
+    "builds",
+    "cms_collections",
+    "cms_fields",
+    "cms_item_versions",
+    "cms_items",
+    "cms_relationships",
+    "collaboration_events",
+    "credential_alerts",
+    "credential_health_runs",
+    "customer_integration_audit",
+    "deployment_events",
+    "deployments",
+    "domains",
+    "exports",
+    "feature_flags",
+    "forge_active_requests",
+    "forge_agents",
+    "forge_analytics_events",
+    "forge_analytics_sites",
+    "forge_usage_state",
+    "form_delivery_events",
+    "form_fields",
+    "form_files",
+    "form_integrations",
+    "form_submissions",
+    "forms",
+    "incident_events",
+    "integration_agent_permissions",
+    "integration_alert_config",
+    "integration_alert_deliveries",
+    "integration_audit_log",
+    "integration_budgets",
+    "integration_connections",
+    "integration_credential_events",
+    "integration_health_checks",
+    "integration_incident_events",
+    "integration_incidents",
+    "integration_limits",
+    "integration_project_assignments",
+    "integration_requests",
+    "integration_template_audit",
+    "integration_template_items",
+    "integration_templates",
+    "integration_threshold_events",
+    "integration_usage_events",
+    "integration_webhook_events",
+    "integration_webhooks",
+    "notifications",
+    "oauth_flow_states",
+    "plan_entitlements",
+    "plan_integration_entitlements",
+    "platform_admins",
+    "platform_api_credentials",
+    "platform_incidents",
+    "profiles",
+    "project_approvals",
+    "project_comments",
+    "project_integration_audit",
+    "project_integration_permissions",
+    "project_integration_state",
+    "project_invitations",
+    "project_members",
+    "project_template_applications",
+    "project_versions",
+    "projects",
+    "provider_model_pricing",
+    "routing_models",
+    "service_health_checks",
+    "site_auth_events",
+    "site_member_roles",
+    "site_members",
+    "site_profile_fields",
+    "site_profile_values",
+    "site_roles",
+    "subscriptions",
+    "support_access_sessions",
+    "template_assets",
+    "template_installations",
+    "template_reviews",
+    "template_versions",
+    "templates",
+    "usage_ledger",
+    "usage_periods",
+    "workflow_approvals",
+    "workflow_connections",
+    "workflow_runs",
+    "workflow_step_runs",
+    "workflow_versions",
+    "workflows",
+    "workspace_ai_keys",
+    "workspace_entitlement_overrides",
+    "workspace_members",
+    "workspace_usage_audit",
+    "workspace_usage_events",
+    "workspaces"
+  ],
+  "coreColumns": [
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "email",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "display_name",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "initials",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "avatar_url",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "profiles",
+      "column": "preferences",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "profiles",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "profiles",
+      "column": "updated_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "role",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_members",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_members",
+      "column": "project_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_members",
+      "column": "user_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "project_members",
+      "column": "role",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "project_members",
+      "column": "status",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_members",
+      "column": "invited_by",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "project_members",
+      "column": "joined_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "project_members",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "project_members",
+      "column": "updated_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "project_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "project_versions",
+      "column": "label",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "project_versions",
+      "column": "description",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "build_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "project_versions",
+      "column": "is_checkpoint",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "project_versions",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "project_versions",
+      "column": "blueprint",
+      "nullable": "YES"
+    },
+    {
+      "type": "int4",
+      "table": "project_versions",
+      "column": "schema_version",
+      "nullable": "NO"
+    },
+    {
+      "type": "int4",
+      "table": "project_versions",
+      "column": "version_number",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "project_versions",
+      "column": "source",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "created_by",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "project_versions",
+      "column": "page_ids",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "project_versions",
+      "column": "change_summary",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "project_versions",
+      "column": "checksum",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "parent_version_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "project_versions",
+      "column": "restored_from_version_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "project_versions",
+      "column": "published_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "project_versions",
+      "column": "metadata",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "projects",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "projects",
+      "column": "name",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "projects",
+      "column": "slug",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "projects",
+      "column": "description",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "projects",
+      "column": "workspace_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "projects",
+      "column": "status",
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "projects",
+      "column": "blueprint",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "projects",
+      "column": "settings",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "projects",
+      "column": "stats",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "projects",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "projects",
+      "column": "updated_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "workspace_members",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "workspace_members",
+      "column": "workspace_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "workspace_members",
+      "column": "user_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "workspace_members",
+      "column": "role",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "workspace_members",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "workspace_members",
+      "column": "updated_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "workspaces",
+      "column": "id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "workspaces",
+      "column": "name",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "workspaces",
+      "column": "slug",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "workspaces",
+      "column": "description",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "workspaces",
+      "column": "owner_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "int4",
+      "table": "workspaces",
+      "column": "member_count",
+      "nullable": "NO"
+    },
+    {
+      "type": "int4",
+      "table": "workspaces",
+      "column": "project_count",
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "workspaces",
+      "column": "settings",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "workspaces",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "workspaces",
+      "column": "updated_at",
+      "nullable": "NO"
+    }
+  ],
+  "corePolicies": [
+    {
+      "name": "profiles_insert_own",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "profiles",
+      "using": null,
+      "command": "INSERT",
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "name": "profiles_select_own",
+      "roles": [
+        "public"
+      ],
+      "table": "profiles",
+      "using": "(id = auth.uid())",
+      "command": "SELECT",
+      "with_check": null
+    },
+    {
+      "name": "profiles_update_own",
+      "roles": [
+        "public"
+      ],
+      "table": "profiles",
+      "using": "(id = auth.uid())",
+      "command": "UPDATE",
+      "with_check": null
+    },
+    {
+      "name": "members_select",
+      "roles": [
+        "public"
+      ],
+      "table": "project_members",
+      "using": "is_project_member(project_id)",
+      "command": "SELECT",
+      "with_check": null
+    },
+    {
+      "name": "owner_admin_delete",
+      "roles": [
+        "public"
+      ],
+      "table": "project_members",
+      "using": "(is_workspace_owner(project_id) OR (project_member_role(project_id) = ANY (ARRAY['owner'::text, 'admin'::text])))",
+      "command": "DELETE",
+      "with_check": null
+    },
+    {
+      "name": "owner_admin_insert",
+      "roles": [
+        "public"
+      ],
+      "table": "project_members",
+      "using": null,
+      "command": "INSERT",
+      "with_check": "(is_workspace_owner(project_id) OR (project_member_role(project_id) = ANY (ARRAY['owner'::text, 'admin'::text])))"
+    },
+    {
+      "name": "owner_admin_update",
+      "roles": [
+        "public"
+      ],
+      "table": "project_members",
+      "using": "(is_workspace_owner(project_id) OR (project_member_role(project_id) = ANY (ARRAY['owner'::text, 'admin'::text])))",
+      "command": "UPDATE",
+      "with_check": "(is_workspace_owner(project_id) OR (project_member_role(project_id) = ANY (ARRAY['owner'::text, 'admin'::text])))"
+    },
+    {
+      "name": "project_versions_owner_all",
+      "roles": [
+        "public"
+      ],
+      "table": "project_versions",
+      "using": "(EXISTS ( SELECT 1\n   FROM (projects p\n     JOIN workspaces w ON ((w.id = p.workspace_id)))\n  WHERE ((p.id = project_versions.project_id) AND (w.owner_id = auth.uid()))))",
+      "command": "ALL",
+      "with_check": null
+    },
+    {
+      "name": "projects_owner_all",
+      "roles": [
+        "public"
+      ],
+      "table": "projects",
+      "using": "(EXISTS ( SELECT 1\n   FROM workspaces w\n  WHERE ((w.id = projects.workspace_id) AND (w.owner_id = auth.uid()))))",
+      "command": "ALL",
+      "with_check": null
+    },
+    {
+      "name": "workspaces_owner_all",
+      "roles": [
+        "public"
+      ],
+      "table": "workspaces",
+      "using": "(owner_id = auth.uid())",
+      "command": "ALL",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "name": "can_access_template",
+      "arguments": "tid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "can_admin_template",
+      "arguments": "tid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "check_advanced_seo_access",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "check_asset_storage_limit",
+      "arguments": "p_user_id uuid, p_extra_bytes bigint",
+      "security_definer": true
+    },
+    {
+      "name": "check_custom_domains_limit",
+      "arguments": "p_user_id uuid, p_project_id uuid, p_extra_domains integer",
+      "security_definer": true
+    },
+    {
+      "name": "check_export_access",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "check_form_submissions_limit",
+      "arguments": "p_project_id uuid, p_extra integer",
+      "security_definer": true
+    },
+    {
+      "name": "check_page_limit",
+      "arguments": "p_user_id uuid, p_project_id uuid, p_extra_pages integer",
+      "security_definer": false
+    },
+    {
+      "name": "check_priority_ai_access",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "check_project_limit",
+      "arguments": "p_user_id uuid, p_extra_projects integer",
+      "security_definer": false
+    },
+    {
+      "name": "check_published_sites_limit",
+      "arguments": "p_user_id uuid, p_extra_sites integer",
+      "security_definer": true
+    },
+    {
+      "name": "check_team_members_limit",
+      "arguments": "p_user_id uuid, p_project_id uuid, p_extra_members integer",
+      "security_definer": true
+    },
+    {
+      "name": "cms_collections_audit",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "cms_fields_audit",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "cms_item_versions_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "cms_items_audit",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "cms_relationships_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "create_project_version",
+      "arguments": "p_project_id uuid, p_blueprint jsonb, p_schema_version integer, p_label text, p_description text, p_source text, p_page_ids jsonb, p_change_summary text, p_checksum text, p_parent_version_id uuid, p_restored_from_version_id uuid, p_published_at timestamp with time zone, p_metadata jsonb, p_is_checkpoint boolean",
+      "security_definer": true
+    },
+    {
+      "name": "current_user_plan",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "forge_collection_role",
+      "arguments": "cid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "forge_credit_balance",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "forge_integration_delete_secret",
+      "arguments": "p_secret_id text",
+      "security_definer": true
+    },
+    {
+      "name": "forge_integration_read_named_secret",
+      "arguments": "p_name text",
+      "security_definer": true
+    },
+    {
+      "name": "forge_integration_read_secret",
+      "arguments": "p_secret_id text",
+      "security_definer": true
+    },
+    {
+      "name": "forge_integration_store_secret",
+      "arguments": "p_secret text, p_name text, p_description text",
+      "security_definer": true
+    },
+    {
+      "name": "forge_integration_update_secret",
+      "arguments": "p_secret_id text, p_secret text, p_name text, p_description text",
+      "security_definer": true
+    },
+    {
+      "name": "forge_item_role",
+      "arguments": "iid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "forge_project_role",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "forge_site_admin",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "handle_new_user",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "has_platform_permission",
+      "arguments": "p_user_id uuid, p_permission text",
+      "security_definer": true
+    },
+    {
+      "name": "is_forge_admin",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "is_project_member",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "is_workspace_owner",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "prevent_domain_provider_field_edit",
+      "arguments": "",
+      "security_definer": false
+    },
+    {
+      "name": "prevent_project_id_change",
+      "arguments": "",
+      "security_definer": false
+    },
+    {
+      "name": "project_invitations_role_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "project_member_role",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "project_members_role_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "project_versions_immutable",
+      "arguments": "",
+      "security_definer": false
+    },
+    {
+      "name": "protect_profiles_role",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "release_ai_credits",
+      "arguments": "p_reservation_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "reserve_ai_credits",
+      "arguments": "p_user_id uuid, p_project_id uuid, p_usage_type text, p_quantity bigint, p_idempotency_key text, p_provider text, p_model text, p_metadata jsonb",
+      "security_definer": true
+    },
+    {
+      "name": "reserve_ai_usage",
+      "arguments": "p_request_id text, p_user_id uuid, p_workspace_id uuid, p_project_id uuid, p_page_id text, p_task_class text",
+      "security_definer": true
+    },
+    {
+      "name": "resolve_effective_plan",
+      "arguments": "p_user_id uuid",
+      "security_definer": true
+    },
+    {
+      "name": "settle_ai_credits",
+      "arguments": "p_reservation_id uuid, p_actual_quantity bigint, p_provider text, p_model text",
+      "security_definer": true
+    },
+    {
+      "name": "site_auth_events_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "site_member_has_role",
+      "arguments": "pid uuid, rkey text",
+      "security_definer": true
+    },
+    {
+      "name": "site_member_of",
+      "arguments": "pid uuid",
+      "security_definer": true
+    },
+    {
+      "name": "site_members_audit",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "site_profile_values_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "workflow_approvals_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "workflow_connections_audit",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "workflow_versions_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "workflows_activate_guard",
+      "arguments": "",
+      "security_definer": true
+    },
+    {
+      "name": "workflows_audit",
+      "arguments": "",
+      "security_definer": true
+    }
+  ]
+}

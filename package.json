@@ -40,9 +40,12 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "dev:forge-test": "vite --mode forge-test --host 127.0.0.1",
+    "build:forge-test": "vite build --mode forge-test",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "type-check": "tsc --noEmit --project tsconfig.app.json",
+    "type-check:config": "tsc --project tsconfig.node.json",
     "test": "vitest run"
   },
   "type": "module",
