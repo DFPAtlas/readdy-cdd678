@@ -31,3 +31,4 @@ pnpm-debug.log*
 *.sw?
 # generated locally (not tracked by Readdy)
 auto-imports.d.ts
+supabase/.temp/
