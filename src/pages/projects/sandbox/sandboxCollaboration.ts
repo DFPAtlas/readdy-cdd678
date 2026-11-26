@@ -202,6 +202,7 @@ async function fetchProfiles(userIds: string[]): Promise<Map<string, { displayNa
 /* ── Row mappers ── */
 
 function mapMember(row: Record<string, unknown>): MemberRecord {
+  const profile = row.profiles && typeof row.profiles === 'object' ? row.profiles as Record<string, unknown> : {};
   return {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -212,10 +213,10 @@ function mapMember(row: Record<string, unknown>): MemberRecord {
     joinedAt: row.joined_at ? String(row.joined_at) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
-    displayName: row.profiles?.display_name ? String((row.profiles as Record<string, unknown>).display_name) : undefined,
-    email: row.profiles?.email ? String((row.profiles as Record<string, unknown>).email) : undefined,
-    initials: row.profiles?.initials ? String((row.profiles as Record<string, unknown>).initials) : undefined,
-    avatarUrl: row.profiles?.avatar_url ? String((row.profiles as Record<string, unknown>).avatar_url) : undefined,
+    displayName: profile.display_name ? String(profile.display_name) : undefined,
+    email: profile.email ? String(profile.email) : undefined,
+    initials: profile.initials ? String(profile.initials) : undefined,
+    avatarUrl: profile.avatar_url ? String(profile.avatar_url) : undefined,
   };
 }
 
@@ -650,7 +651,7 @@ export async function logEvent(eventType: string, entityType?: string, entityId?
     entity_type: entityType ?? null,
     entity_id: entityId ?? null,
     safe_metadata: safe,
-  }).then(() => undefined).catch(() => undefined);
+  }).then(() => undefined, () => undefined);
 }
 
 /* ── Realtime presence ── */

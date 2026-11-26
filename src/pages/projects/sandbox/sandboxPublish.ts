@@ -19,7 +19,7 @@ export const ENVIRONMENT_LABELS: Record<DeploymentEnvironment, string> = {
 
 export type DeploymentStatus =
   | 'queued' | 'validating' | 'deploying' | 'verifying'
-  | 'active' | 'failed' | 'cancelled' | 'superseded' | 'rolled_back';
+  | 'active' | 'completed' | 'failed' | 'cancelled' | 'superseded' | 'rolled_back';
 
 export const DEPLOYMENT_STATUS_LABELS: Record<DeploymentStatus, string> = {
   queued: 'Queued',
@@ -27,6 +27,7 @@ export const DEPLOYMENT_STATUS_LABELS: Record<DeploymentStatus, string> = {
   deploying: 'Deploying',
   verifying: 'Verifying',
   active: 'Active',
+  completed: 'Completed',
   failed: 'Failed',
   cancelled: 'Cancelled',
   superseded: 'Superseded',

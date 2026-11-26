@@ -24,7 +24,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function TestResultBox({ result }: { result: TestResult }) {
-  const ok = result.ok;
+  const ok = result.ok === true;
   return (
     <div className={`rounded-md p-3 text-xs leading-relaxed ${ok ? 'bg-forge-success/10 text-forge-success' : 'bg-forge-error/10 text-forge-error'}`} role="status">
       <div className="flex items-start gap-2">
@@ -83,9 +83,9 @@ export function IntegrationFormModal({ mode, open, providers, connection, onClos
     const providerKey = isReplace ? (connection?.provider_id ?? '') : providerId;
     const res = await integrationsApi.test(providerKey, apiKey.trim(), isReplace ? (connection?.base_url ?? undefined) : baseUrl.trim() || undefined);
     setBusy('idle');
-    if (res.ok) {
+    if (res.ok === true) {
       setTestResult(res.data);
-      setTestedOk(res.data.ok);
+      setTestedOk(res.data.ok === true);
     } else {
       setError(res.message);
     }
@@ -97,14 +97,14 @@ export function IntegrationFormModal({ mode, open, providers, connection, onClos
     setError('');
     if (isReplace && connection) {
       const res = await integrationsApi.replace({ connectionId: connection.id, apiKey: apiKey.trim(), testFirst, confirmProduction: connection.environment === 'production' });
-      if (res.ok) { onSaved(); onClose(); }
+      if (res.ok === true) { onSaved(); onClose(); }
       else setError(res.message);
     } else {
       const res = await integrationsApi.save({
         providerId, connectionName: connectionName.trim(), environment, apiKey: apiKey.trim(),
         baseUrl: baseUrl.trim() || undefined, testFirst,
       });
-      if (res.ok) { onSaved(); onClose(); }
+      if (res.ok === true) { onSaved(); onClose(); }
       else setError(res.message);
     }
     setBusy('idle');

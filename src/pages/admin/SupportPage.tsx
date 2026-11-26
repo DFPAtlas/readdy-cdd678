@@ -13,7 +13,7 @@ export default function SupportPage() {
     setLoading(true);
     setError('');
     const res = await adminApi.supportList();
-    if (res.ok) setSessions(res.data.sessions);
+    if (res.ok === true) setSessions(res.data.sessions);
     else setError(res.message);
     setLoading(false);
   }, []);

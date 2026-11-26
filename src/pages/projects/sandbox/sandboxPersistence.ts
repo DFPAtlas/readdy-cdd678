@@ -1,6 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/services/supabaseClient';
 import { defaultTheme, type ThemeDefinition } from './sandboxTheme';
+import { sandboxProjectId, projectStorageKey } from './sandboxProjectScope';
 
 export type CanvasElementKind =
   | 'Heading'
@@ -271,6 +271,7 @@ export type ComponentDefinition = {
 
 export type SandboxDocument = {
   schemaVersion: 4;
+  projectId?: string;
   projectName: string;
   activePageId: string;
   pages: SandboxPage[];
@@ -288,8 +289,7 @@ export type SaveResult = {
   projectId?: string;
 };
 
-const STORAGE_KEY = 'forge:sandbox:portfolio-website:v1';
-const BACKUP_KEY = 'forge:sandbox:portfolio-website:backup:v1';
+
 
 export function defaultPageSeo(projectName: string): PageSeo {
   return {
@@ -325,7 +325,7 @@ function createHomePage(elements: CanvasElement[], projectName: string): Sandbox
     name: 'Home',
     slug: '/',
     isHome: true,
-    status: 'published',
+    status: 'draft',
     showInNavigation: true,
     navigationLabel: 'Home',
     elements,
@@ -393,7 +393,8 @@ function normalizeDocument(value: unknown): SandboxDocument | null {
     const lib = emptyComponentLibrary();
     return {
       schemaVersion: 4,
-      projectName: raw.projectName ?? 'Portfolio Website',
+      projectName: raw.projectName ?? 'Untitled website',
+      projectId: raw.projectId,
       activePageId,
       pages,
       globalSections: raw.globalSections ?? defaultGlobalSections(),
@@ -431,187 +432,70 @@ export type ResolvedSandboxProject = {
   email?: string;
   workspaceId: string;
   projectId: string;
+  projectName: string;
 };
 
-export async function resolveSandboxProject(): Promise<ResolvedSandboxProject | null> {
+/** Read-only lookup. Supabase RLS remains the authority for project access. */
+export async function resolveSandboxProject(
+  requestedProjectId = sandboxProjectId(),
+): Promise<ResolvedSandboxProject | null> {
   const supabase = getSupabaseClient();
-  if (!supabase) return null;
-  try {
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) return null;
-    const workspaceId = await getOwnedWorkspaceId(supabase, authData.user.id, authData.user.email);
-
-    const { data: existing, error: lookupError } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('workspace_id', workspaceId)
-      .eq('slug', 'portfolio-website')
-      .limit(1)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-
-    let projectId = existing?.id as string | undefined;
-    if (!projectId) {
-      const { data: created, error: createError } = await supabase
-        .from('projects')
-        .insert({
-          name: 'Portfolio Website',
-          slug: 'portfolio-website',
-          workspace_id: workspaceId,
-          status: 'draft',
-        })
-        .select('id')
-        .single();
-      if (createError) throw createError;
-      projectId = created.id as string;
-    }
-
-    return { userId: authData.user.id, email: authData.user.email, workspaceId, projectId };
-  } catch {
-    return null;
-  }
-}
-
-function backupLegacyRaw(raw: unknown) {
-  if (raw && typeof raw === 'object') {
-    const version = (raw as { schemaVersion?: number }).schemaVersion;
-    if (version === 1 || version === 2) {
-      try { window.localStorage.setItem(BACKUP_KEY, JSON.stringify(raw)); } catch { /* backup best-effort */ }
-    }
-  }
-}
-
-function loadLocal(): SandboxDocument | null {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    const parsed: unknown = JSON.parse(stored);
-    backupLegacyRaw(parsed);
-    return normalizeDocument(parsed);
-  } catch {
-    return null;
-  }
-}
-
-function saveLocal(document: SandboxDocument) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-}
-
-async function getOwnedWorkspaceId(supabase: SupabaseClient, userId: string, email?: string) {
-  const { error: profileError } = await supabase.from('profiles').upsert(
-    {
-      id: userId,
-      email: email ?? null,
-      display_name: email?.split('@')[0] ?? 'Forge user',
-      initials: (email?.slice(0, 2) ?? 'FU').toUpperCase(),
-    },
-    { onConflict: 'id' },
-  );
-  if (profileError) throw profileError;
-
-  const { data: existing, error: lookupError } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('owner_id', userId)
-    .limit(1)
-    .maybeSingle();
-  if (lookupError) throw lookupError;
-  if (existing?.id) return existing.id as string;
-
-  const { data: created, error: createError } = await supabase
-    .from('workspaces')
-    .insert({
-      name: 'My Forge Workspace',
-      slug: `forge-${userId}`,
-      owner_id: userId,
-      description: 'Created by the Forge visual sandbox',
-    })
-    .select('id')
-    .single();
-  if (createError) throw createError;
-  return created.id as string;
-}
-
-async function loadCloud(supabase: SupabaseClient): Promise<SandboxDocument | null> {
+  if (!supabase || !requestedProjectId) return null;
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) return null;
-
-  const { data: workspaces, error: workspaceError } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('owner_id', authData.user.id)
-    .limit(1);
-  if (workspaceError || !workspaces?.[0]?.id) return null;
-
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('blueprint')
-    .eq('workspace_id', workspaces[0].id)
-    .eq('slug', 'portfolio-website')
-    .limit(1)
-    .maybeSingle();
-  if (projectError || !project?.blueprint) return null;
-  backupLegacyRaw(project.blueprint);
-  return normalizeDocument(project.blueprint);
+  const { data, error } = await supabase.from('projects')
+    .select('id, name, workspace_id').eq('id', requestedProjectId).maybeSingle();
+  if (error) throw error;
+  if (!data || data.id !== requestedProjectId || !data.workspace_id) return null;
+  return {
+    userId: authData.user.id, email: authData.user.email,
+    workspaceId: data.workspace_id, projectId: data.id, projectName: data.name,
+  };
 }
 
-export async function loadSandboxDocument(): Promise<SandboxDocument | null> {
-  const local = loadLocal();
+export async function loadSandboxDocument(
+  requestedProjectId = sandboxProjectId(),
+): Promise<SandboxDocument> {
+  const project = await resolveSandboxProject(requestedProjectId);
   const supabase = getSupabaseClient();
-  if (!supabase) return local;
-
+  if (!project || !supabase) throw new Error('Project unavailable or access denied');
+  const { data, error } = await supabase.from('projects')
+    .select('blueprint').eq('id', project.projectId)
+    .eq('workspace_id', project.workspaceId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Project unavailable or access denied');
+  const cloud = data.blueprint == null ? createBlankDocument(project.projectName) : normalizeDocument(data.blueprint);
+  if (!cloud) throw new Error('This project document needs recovery before editing');
+  if (cloud.projectId && cloud.projectId !== project.projectId) throw new Error('Project document identity mismatch');
+  const key = projectStorageKey(project.userId, project.projectId, 'document');
+  let local: SandboxDocument | null = null;
   try {
-    const cloud = await loadCloud(supabase);
-    if (!cloud) return local;
-    if (!local || Date.parse(cloud.updatedAt) >= Date.parse(local.updatedAt)) {
-      saveLocal(cloud);
-      return cloud;
-    }
-  } catch {
-    // Offline or unconfigured cloud storage must never block the editor.
-  }
-  return local;
+    const raw = window.localStorage.getItem(key);
+    local = raw ? normalizeDocument(JSON.parse(raw)) : null;
+  } catch { /* Browser storage is optional when loading from cloud. */ }
+  if (local?.projectId !== project.projectId) local = null;
+  const selected = local && Date.parse(local.updatedAt) > Date.parse(cloud.updatedAt) ? local : cloud;
+  return { ...selected, projectId: project.projectId, projectName: project.projectName };
 }
 
-export async function saveSandboxDocument(document: SandboxDocument): Promise<SaveResult> {
-  saveLocal(document);
-  window.localStorage.removeItem(BACKUP_KEY);
-  const supabase = getSupabaseClient();
-  if (!supabase) return { storage: 'local' };
-
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) return { storage: 'local' };
-
-  const workspaceId = await getOwnedWorkspaceId(supabase, authData.user.id, authData.user.email);
-  const { data: existing, error: lookupError } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('slug', 'portfolio-website')
-    .limit(1)
-    .maybeSingle();
-  if (lookupError) throw lookupError;
-
-  if (existing?.id) {
-    const { error } = await supabase
-      .from('projects')
-      .update({ blueprint: document, updated_at: document.updatedAt })
-      .eq('id', existing.id);
-    if (error) throw error;
-    return { storage: 'cloud', projectId: existing.id as string };
+export async function saveSandboxDocument(
+  document: SandboxDocument,
+  requestedProjectId = sandboxProjectId(),
+): Promise<SaveResult> {
+  if (!requestedProjectId || document.projectId !== requestedProjectId) {
+    throw new Error('Project changed; reopen it before saving');
   }
-
-  const { data: created, error: createError } = await supabase
-    .from('projects')
-    .insert({
-      name: document.projectName,
-      slug: 'portfolio-website',
-      workspace_id: workspaceId,
-      status: 'draft',
-      blueprint: document,
-    })
-    .select('id')
-    .single();
-  if (createError) throw createError;
-  return { storage: 'cloud', projectId: created.id as string };
+  const project = await resolveSandboxProject(requestedProjectId);
+  const supabase = getSupabaseClient();
+  if (!project || !supabase) throw new Error('Project unavailable or access denied');
+  const key = projectStorageKey(project.userId, project.projectId, 'document');
+  // A local failure must not prevent a valid cloud save; a cloud failure is surfaced.
+  try { window.localStorage.setItem(key, JSON.stringify(document)); } catch { /* Cloud save can still succeed. */ }
+  const { data, error } = await supabase.from('projects')
+    .update({ blueprint: document, updated_at: document.updatedAt })
+    .eq('id', project.projectId).eq('workspace_id', project.workspaceId)
+    .select('id').maybeSingle();
+  if (error) throw error;
+  if (!data || data.id !== project.projectId) throw new Error('Project was not saved; access may have changed');
+  return { storage: 'cloud', projectId: project.projectId };
 }

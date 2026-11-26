@@ -166,7 +166,7 @@ export default function CheckoutPage() {
     setError(null);
     const requestKey = crypto.randomUUID();
     const result = await createHostedCheckoutSession(requested.plan, requested.interval, requestKey);
-    if (result.ok) {
+    if (result.ok === true) {
       openExternal(result.url);
       return;
     }
@@ -186,7 +186,7 @@ export default function CheckoutPage() {
     setError(null);
     const result = await openBillingPortal();
     setPortalBusy(false);
-    if (result.ok) {
+    if (result.ok === true) {
       openExternal(result.url);
       return;
     }

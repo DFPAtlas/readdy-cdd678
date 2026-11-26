@@ -1,4 +1,5 @@
-import { getSandboxClient, resolveSandboxProject, type ResolvedSandboxProject } from './sandboxPersistence';
+import { invokeFunctionWithSignal } from '@/services/invokeFunctionWithSignal';
+import { getSandboxClient, resolveSandboxProject } from './sandboxPersistence';
 import type { SandboxAiProposal, SandboxAiOperation, SandboxComponentOperation, SandboxPageOperation } from './sandboxAi';
 
 export type AiTaskClass = 'fast_edit' | 'standard' | 'complex' | 'copywriting' | 'seo' | 'accessibility' | 'image_alt' | 'local';
@@ -44,21 +45,14 @@ export type AiGatewayOutcome = {
   localFallbackAvailable: boolean;
 };
 
-let cachedProject: ResolvedSandboxProject | null | undefined;
 
 function baseUsage(mode: AiMode, durationMs = 0): AiUsage {
   return { mode, inputTokens: 0, outputTokens: 0, estimatedCostMicros: 0, durationMs };
 }
 
 async function resolveProjectId(): Promise<string | null> {
-  if (cachedProject !== undefined && cachedProject !== null) return cachedProject.projectId;
-  try {
-    cachedProject = await resolveSandboxProject();
-    return cachedProject?.projectId ?? null;
-  } catch {
-    cachedProject = null;
-    return null;
-  }
+  const project = await resolveSandboxProject();
+  return project?.projectId ?? null;
 }
 
 function parseOutcome(data: unknown, durationMs: number): AiGatewayOutcome {
@@ -124,6 +118,7 @@ function parseOutcome(data: unknown, durationMs: number): AiGatewayOutcome {
 }
 
 export async function invokeForgeAi(request: AiGatewayRequest, signal: AbortSignal): Promise<AiGatewayOutcome> {
+  signal.throwIfAborted();
   const supabase = getSandboxClient();
   if (!supabase) {
     return { mode: 'offline', proposal: null, usage: baseUsage('offline'), errorCode: 'NOT_CONFIGURED', message: 'Supabase not configured', localFallbackAvailable: true };
@@ -135,6 +130,7 @@ export async function invokeForgeAi(request: AiGatewayRequest, signal: AbortSign
   } catch {
     projectId = null;
   }
+  signal.throwIfAborted();
   if (!projectId) {
     return { mode: 'offline', proposal: null, usage: baseUsage('offline'), errorCode: 'AUTH_REQUIRED', message: 'Sign in to use live AI', localFallbackAvailable: true };
   }
@@ -159,7 +155,8 @@ export async function invokeForgeAi(request: AiGatewayRequest, signal: AbortSign
 
   const started = Date.now();
   try {
-    const { data, error } = await supabase.functions.invoke('forge-ai', { body, signal });
+    const { data, error } = await invokeFunctionWithSignal(supabase, 'forge-ai', body, signal);
+    signal.throwIfAborted();
     const durationMs = Date.now() - started;
     if (error) {
       return { mode: 'offline', proposal: null, usage: baseUsage('offline', durationMs), errorCode: 'FUNCTION_ERROR', message: 'Live AI unavailable', localFallbackAvailable: true };

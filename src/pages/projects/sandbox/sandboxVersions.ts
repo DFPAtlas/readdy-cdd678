@@ -1,3 +1,4 @@
+import { currentProjectStorageKey, sandboxProjectId } from './sandboxProjectScope';
 import { getSandboxClient, resolveSandboxProject, type CanvasElement, type ComponentDefinition, type SandboxDocument, type SandboxPage } from './sandboxPersistence';
 
 /* ──────────────────────────────────────────────────────────────
@@ -14,10 +15,11 @@ export type VersionSource =
   | 'publish'
   | 'restore'
   | 'import'
-  | 'theme';
+  | 'theme'
+  | 'template';
 
 export const VERSION_SOURCES: VersionSource[] = [
-  'manual', 'autosave', 'ai', 'page', 'component', 'asset', 'publish', 'restore', 'import', 'theme',
+  'manual', 'autosave', 'ai', 'page', 'component', 'asset', 'publish', 'restore', 'import', 'theme', 'template',
 ];
 
 export const VERSION_SOURCE_LABELS: Record<VersionSource, string> = {
@@ -31,6 +33,7 @@ export const VERSION_SOURCE_LABELS: Record<VersionSource, string> = {
   restore: 'Restore',
   import: 'Import',
   theme: 'Theme update',
+  template: 'Template installation',
 };
 
 export type VersionEntry = {
@@ -289,6 +292,7 @@ export async function fetchVersionBlueprint(versionId: string): Promise<SandboxD
 }
 
 export async function snapshotVersion(document: SandboxDocument, options: SnapshotOptions): Promise<SnapshotResult> {
+  if (document.projectId !== sandboxProjectId()) throw new Error('Project changed before snapshot');
   const checksum = checksumDocument(document);
   const supabase = getSandboxClient();
 
@@ -330,12 +334,11 @@ export async function snapshotVersion(document: SandboxDocument, options: Snapsh
    Local history (IndexedDB)
    ────────────────────────────────────────────────────────────── */
 
-const LOCAL_DB = 'forge-version-history';
 const LOCAL_STORE = 'versions';
 
 function openLocalDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(LOCAL_DB, 1);
+    const request = indexedDB.open(currentProjectStorageKey('versions'), 1);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(LOCAL_STORE)) db.createObjectStore(LOCAL_STORE, { keyPath: 'id' });
@@ -430,13 +433,13 @@ export async function getVersionBlueprint(entry: VersionEntry): Promise<SandboxD
    Crash recovery (lightweight working copy)
    ────────────────────────────────────────────────────────────── */
 
-const RECOVERY_KEY = 'forge:sandbox:recovery:v1';
 
 export type RecoveryRecord = { document: SandboxDocument; savedAt: string };
 
 export function saveRecovery(document: SandboxDocument): void {
+  if (document.projectId !== sandboxProjectId()) return;
   try {
-    window.localStorage.setItem(RECOVERY_KEY, JSON.stringify({ document, savedAt: new Date().toISOString() } satisfies RecoveryRecord));
+    window.localStorage.setItem(currentProjectStorageKey('recovery'), JSON.stringify({ document, savedAt: new Date().toISOString() } satisfies RecoveryRecord));
   } catch {
     // best-effort
   }
@@ -444,10 +447,10 @@ export function saveRecovery(document: SandboxDocument): void {
 
 export function loadRecovery(): RecoveryRecord | null {
   try {
-    const raw = window.localStorage.getItem(RECOVERY_KEY);
+    const raw = window.localStorage.getItem(currentProjectStorageKey('recovery'));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as RecoveryRecord;
-    if (!parsed?.document?.pages) return null;
+    if (!parsed?.document?.pages || parsed.document.projectId !== sandboxProjectId()) return null;
     return parsed;
   } catch {
     return null;
@@ -456,7 +459,7 @@ export function loadRecovery(): RecoveryRecord | null {
 
 export function clearRecovery(): void {
   try {
-    window.localStorage.removeItem(RECOVERY_KEY);
+    window.localStorage.removeItem(currentProjectStorageKey('recovery'));
   } catch {
     // best-effort
   }

@@ -255,7 +255,7 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
     const res = await saveVersion(workflow.id, definition, status);
     setSaving(false);
     setMessage(res.message);
-    if (res.ok) await onRefresh();
+    if (res.ok === true) await onRefresh();
   };
 
   const handleToggleStatus = async () => {
@@ -270,7 +270,7 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
     }
     const res = await setWorkflowStatus(workflow.id, next);
     setMessage(res.message);
-    if (res.ok) await onRefresh();
+    if (res.ok === true) await onRefresh();
   };
 
   const selected = definition.nodes.find((n) => n.id === selectedId) ?? null;
@@ -338,8 +338,8 @@ export function WorkflowBuilder({ projectId, workflow, role, onBack, onRefresh }
                     stroke="#f5b942" strokeWidth="1.5"
                     style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                     onClick={() => deleteEdge(e.id)}
-                    title="Click to remove connection"
-                  />
+                    aria-label="Remove connection"
+                  ><title>Click to remove connection</title></line>
                 );
               })}
             </svg>

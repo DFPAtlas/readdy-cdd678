@@ -454,7 +454,7 @@ export async function readPackageFile(file: File): Promise<{ ok: boolean; messag
     const text = await file.text();
     const parsed: unknown = JSON.parse(text);
     const result = await validateManifest(parsed);
-    if (!result.ok || !result.manifest) return { ok: false, message: result.errors.join(' ') };
+    if (result.ok === false || !result.manifest) return { ok: false, message: result.errors.join(' ') };
     const findings = scanManifest(result.manifest);
     const blocking = findings.filter((f) => f.severity === 'error');
     if (blocking.length) {
@@ -677,7 +677,7 @@ export async function recordInstallation(input: {
     installed_by: userId,
     accepted_licence_version: `${input.licence}@1`,
     installation_mode: input.installationMode,
-  }).then(() => undefined).catch(() => undefined);
+  }).then(() => undefined, () => undefined);
 }
 
 export async function deleteTemplate(templateId: string): Promise<{ ok: boolean; message: string }> {

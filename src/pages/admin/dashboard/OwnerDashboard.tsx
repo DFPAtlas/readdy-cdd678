@@ -64,11 +64,11 @@ export default function OwnerDashboard() {
       adminApi.health(),
       adminApi.billingSummary(),
     ]);
-    if (s.ok) setSnapshot(s.data); else setError(s.message);
-    if (a.ok) { setAttention(a.data.items); setAttentionCheckedAt(a.data.checkedAt); }
-    if (act.ok) { setCustomers(act.data.customers); setPlatform(act.data.platform); }
-    if (h.ok) setHealth(h.data); else if (!error) setError(h.message);
-    if (bs.ok) setMrr(bs.data.summary.mrr); else setMrr(null);
+    if (s.ok === true) setSnapshot(s.data); else setError(s.message);
+    if (a.ok === true) { setAttention(a.data.items); setAttentionCheckedAt(a.data.checkedAt); }
+    if (act.ok === true) { setCustomers(act.data.customers); setPlatform(act.data.platform); }
+    if (h.ok === true) setHealth(h.data); else if (!error) setError(h.message);
+    if (bs.ok === true) setMrr(bs.data.summary.mrr); else setMrr(null);
     setLoading(false);
   }, []);
 
