@@ -12,6 +12,8 @@ Read-only preflight completed 26 November 2026 against Forge project `cpjqmetlqz
 
 The metadata inventory contains table names, core columns/policies, function signatures and migration identifiers. It contains no customer rows or credentials and cannot restore a database. RLS enablement alone does not prove cross-account isolation.
 
+Follow-up: the 35 missing table definitions are now captured in a separately reviewed schema supplement, and a critical integration-secret RPC permission repair is prepared. See [the reconciliation report](forge-v2-schema-reconciliation.md). Full Supabase reconstruction and live deployment of that permission repair are still outstanding.
+
 ## Start the test frontend
 
 After choosing and provisioning an isolated Supabase target, copy `.env.forge-test.example` to `.env.forge-test.local` and set:

@@ -20,5 +20,6 @@ jobs:
       - run: npm ci
       - run: npm run type-check
       - run: npm run type-check:config
+      - run: node scripts/render-schema-supplement.mjs --check
       - run: npm test
       - run: npm run build
